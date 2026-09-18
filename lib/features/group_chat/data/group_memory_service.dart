@@ -20,7 +20,9 @@ class GroupMemoryService {
     final group = await _db.getGroup(groupId);
     if (group == null) return;
 
-    final messages = await _db.getGroupMessages(groupId);
+    final messages = (await _db.getGroupMessages(groupId))
+        .where((m) => m.visibleToAi)
+        .toList();
     if (messages.isEmpty) return;
 
     final members = await _db.watchMembersFor(groupId).first;

@@ -171,6 +171,11 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
             await m.addColumn(messages, messages.type);
             await m.addColumn(messages, messages.visibleToAi);
           }
+          if (from < 12) {
+            // Same slash-command markers on group messages (for /mode).
+            await m.addColumn(groupMessages, groupMessages.type);
+            await m.addColumn(groupMessages, groupMessages.visibleToAi);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');

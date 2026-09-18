@@ -39,6 +39,8 @@ void main() {
     expect(text, contains('/summary'));
     expect(text, contains('【世界书】'));
     expect(text, contains('/lore'));
+    expect(text, contains('【群聊】'));
+    expect(text, contains('/mode'));
     expect(text, contains('【系统】'));
     expect(text, contains('/help'));
   });
@@ -205,6 +207,35 @@ void main() {
     final session = await _insertSession(db);
     final reply = await executeCommand(db, session, '/lore');
     expect(reply, contains('暂无世界书条目'));
+    await db.close();
+  });
+
+  test('/mode displays and switches the group speak mode', () async {
+    final db = _db();
+    await db.insertGroup(GroupsCompanion.insert(
+      id: 'g1',
+      name: '测试群',
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 1,
+    ));
+    final group = (await db.getGroup('g1'))!;
+
+    expect(await executeGroupCommand(db, group, '/mode'), contains('当前：自动'));
+    expect(
+        await executeGroupCommand(db, group, '/mode turn'), contains('已切换为：轮流'));
+    expect((await db.getGroup('g1'))!.speakMode, 'turn');
+    expect(await executeGroupCommand(db, group, '/mode mention'),
+        contains('已切换为：点名@角色'));
+    expect((await db.getGroup('g1'))!.speakMode, 'call');
+    expect(await executeGroupCommand(db, group, '/mode bogus'), contains('未知模式'));
+    await db.close();
+  });
+
+  test('/mode in single chat is group-only', () async {
+    final db = _db();
+    final session = await _insertSession(db);
+    expect(await executeCommand(db, session, '/mode'), contains('此指令仅群聊可用'));
     await db.close();
   });
 }

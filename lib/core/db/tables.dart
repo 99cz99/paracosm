@@ -285,10 +285,16 @@ class GroupMessages extends Table {
   TextColumn get id => text()();
   TextColumn get groupId => text().references(Groups, #id, onDelete: KeyAction.cascade)();
   TextColumn get speakerCharacterId => text().nullable()();
-  TextColumn get role => text()(); // user / assistant
+  TextColumn get role => text()(); // user / assistant / system
   TextColumn get content => text()();
   IntColumn get orderIndex => integer()();
   IntColumn get timestamp => integer()();
+
+  /// 指令消息类型：null=普通消息，'command'=用户指令，'command_reply'=App 回复。
+  TextColumn get type => text().nullable()();
+
+  /// 是否进入 AI Prompt。指令消息为 false。
+  BoolColumn get visibleToAi => boolean().withDefault(const Constant(true))();
 
   @override
   Set<Column> get primaryKey => {id};

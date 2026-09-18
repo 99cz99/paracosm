@@ -5,5 +5,5 @@ class AppConfig {
   static const String appName = 'Paracosm';
 
   /// Drift schema version. Bump on every structural migration.
-  static const int schemaVersion = 11;
+  static const int schemaVersion = 12;
 }

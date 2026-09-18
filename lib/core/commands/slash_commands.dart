@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
+
 import '../db/database.dart';
 
 /// A slash-command definition. Adding a new command = adding one entry below
@@ -54,6 +56,15 @@ const allSlashCommands = <SlashCommand>[
     description: '查看世界书',
     usage: '/lore',
     detail: '列出所有可用的世界书条目（角色级 + 世界级），只读。',
+  ),
+  SlashCommand(
+    name: 'mode',
+    category: '群聊',
+    description: '切换群聊发言模式',
+    usage: '/mode [auto|turn|call]',
+    params: ['模式'],
+    detail: '不带参数：显示当前发言模式。\n'
+        '带参数：切换为 auto（自动）/ turn（轮流）/ call（点名@角色）。仅群聊可用。',
   ),
   SlashCommand(
     name: 'help',
@@ -234,6 +245,47 @@ List<Map<String, dynamic>> _parseEntries(String bookJson) {
   }
 }
 
+/// Executes a slash command in a GROUP chat. Supports /mode and /help; other
+/// commands are single-chat only for now.
+Future<String> executeGroupCommand(
+  AppDatabase db,
+  Group group,
+  String input,
+) async {
+  final trimmed = input.trim();
+  final body = trimmed.startsWith('/') ? trimmed.substring(1) : trimmed;
+  final parts = body.split(RegExp(r'\s+'));
+  final name = parts.first;
+  final arg = parts.length > 1 ? parts.sublist(1).join(' ') : null;
+
+  switch (name) {
+    case 'help':
+      return helpText(arg);
+    case 'mode':
+      return await _modeCommand(db, group, arg);
+    default:
+      return '未知指令：/$name\n群聊可用指令：/mode、/help';
+  }
+}
+
+/// Displays or switches the group's speak mode (auto / turn / call).
+Future<String> _modeCommand(AppDatabase db, Group group, String? arg) async {
+  final current = _speakModeLabels[group.speakMode] ?? group.speakMode;
+  final modeArg = arg?.trim().toLowerCase();
+  if (modeArg == null || modeArg.isEmpty) {
+    return '【发言模式】\n当前：$current\n'
+        '可选：/mode auto（自动）、/mode turn（轮流）、/mode call（点名@角色）';
+  }
+
+  final normalized = _speakModeAliases[modeArg] ?? modeArg;
+  if (!_speakModeLabels.containsKey(normalized)) {
+    return '未知模式：$modeArg\n可选：auto（自动）、turn（轮流）、call（点名@角色）';
+  }
+
+  await db.updateGroup(group.id, GroupsCompanion(speakMode: Value(normalized)));
+  return '【发言模式】\n已切换为：${_speakModeLabels[normalized]}';
+}
+
 /// Reads and formats the relation: plain relation for regular characters,
 /// skill-growth affinity for skill characters. Returns '' when empty.
 Future<String> _relationText(
@@ -273,6 +325,8 @@ Future<String> executeCommand(
       return await _summaryCommand(db, session);
     case 'lore':
       return await _loreCommand(db, session);
+    case 'mode':
+      return '此指令仅群聊可用';
     default:
       return '未知指令：/$name\n输入 /help 查看所有可用指令。';
   }
@@ -324,6 +378,19 @@ const _relationLabels = {
   'total_h_scenes_completed': 'H场景完成次数',
   'corruption_milestones': '堕落里程碑',
   'last_session': '上次会话',
+};
+
+/// Speak modes for /mode (group chat). Stored values are auto/turn/call;
+/// rotate/mention are accepted as friendly aliases.
+const _speakModeLabels = {
+  'auto': '自动',
+  'turn': '轮流',
+  'call': '点名@角色',
+};
+
+const _speakModeAliases = {
+  'rotate': 'turn',
+  'mention': 'call',
 };
 
 /// Formats a state JSON blob into readable lines, hoisting core fields

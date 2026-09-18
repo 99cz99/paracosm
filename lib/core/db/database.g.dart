@@ -7483,6 +7483,30 @@ class $GroupMessagesTable extends GroupMessages
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _visibleToAiMeta = const VerificationMeta(
+    'visibleToAi',
+  );
+  @override
+  late final GeneratedColumn<bool> visibleToAi = GeneratedColumn<bool>(
+    'visible_to_ai',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("visible_to_ai" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -7492,6 +7516,8 @@ class $GroupMessagesTable extends GroupMessages
     content,
     orderIndex,
     timestamp,
+    type,
+    visibleToAi,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7559,6 +7585,21 @@ class $GroupMessagesTable extends GroupMessages
     } else if (isInserting) {
       context.missing(_timestampMeta);
     }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    }
+    if (data.containsKey('visible_to_ai')) {
+      context.handle(
+        _visibleToAiMeta,
+        visibleToAi.isAcceptableOrUnknown(
+          data['visible_to_ai']!,
+          _visibleToAiMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -7596,6 +7637,14 @@ class $GroupMessagesTable extends GroupMessages
         DriftSqlType.int,
         data['${effectivePrefix}timestamp'],
       )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      ),
+      visibleToAi: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}visible_to_ai'],
+      )!,
     );
   }
 
@@ -7613,6 +7662,12 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
   final String content;
   final int orderIndex;
   final int timestamp;
+
+  /// 指令消息类型：null=普通消息，'command'=用户指令，'command_reply'=App 回复。
+  final String? type;
+
+  /// 是否进入 AI Prompt。指令消息为 false。
+  final bool visibleToAi;
   const GroupMessage({
     required this.id,
     required this.groupId,
@@ -7621,6 +7676,8 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
     required this.content,
     required this.orderIndex,
     required this.timestamp,
+    this.type,
+    required this.visibleToAi,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7634,6 +7691,10 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
     map['content'] = Variable<String>(content);
     map['order_index'] = Variable<int>(orderIndex);
     map['timestamp'] = Variable<int>(timestamp);
+    if (!nullToAbsent || type != null) {
+      map['type'] = Variable<String>(type);
+    }
+    map['visible_to_ai'] = Variable<bool>(visibleToAi);
     return map;
   }
 
@@ -7648,6 +7709,8 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
       content: Value(content),
       orderIndex: Value(orderIndex),
       timestamp: Value(timestamp),
+      type: type == null && nullToAbsent ? const Value.absent() : Value(type),
+      visibleToAi: Value(visibleToAi),
     );
   }
 
@@ -7666,6 +7729,8 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
       content: serializer.fromJson<String>(json['content']),
       orderIndex: serializer.fromJson<int>(json['orderIndex']),
       timestamp: serializer.fromJson<int>(json['timestamp']),
+      type: serializer.fromJson<String?>(json['type']),
+      visibleToAi: serializer.fromJson<bool>(json['visibleToAi']),
     );
   }
   @override
@@ -7679,6 +7744,8 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
       'content': serializer.toJson<String>(content),
       'orderIndex': serializer.toJson<int>(orderIndex),
       'timestamp': serializer.toJson<int>(timestamp),
+      'type': serializer.toJson<String?>(type),
+      'visibleToAi': serializer.toJson<bool>(visibleToAi),
     };
   }
 
@@ -7690,6 +7757,8 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
     String? content,
     int? orderIndex,
     int? timestamp,
+    Value<String?> type = const Value.absent(),
+    bool? visibleToAi,
   }) => GroupMessage(
     id: id ?? this.id,
     groupId: groupId ?? this.groupId,
@@ -7700,6 +7769,8 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
     content: content ?? this.content,
     orderIndex: orderIndex ?? this.orderIndex,
     timestamp: timestamp ?? this.timestamp,
+    type: type.present ? type.value : this.type,
+    visibleToAi: visibleToAi ?? this.visibleToAi,
   );
   GroupMessage copyWithCompanion(GroupMessagesCompanion data) {
     return GroupMessage(
@@ -7714,6 +7785,10 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
           ? data.orderIndex.value
           : this.orderIndex,
       timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+      type: data.type.present ? data.type.value : this.type,
+      visibleToAi: data.visibleToAi.present
+          ? data.visibleToAi.value
+          : this.visibleToAi,
     );
   }
 
@@ -7726,7 +7801,9 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
           ..write('role: $role, ')
           ..write('content: $content, ')
           ..write('orderIndex: $orderIndex, ')
-          ..write('timestamp: $timestamp')
+          ..write('timestamp: $timestamp, ')
+          ..write('type: $type, ')
+          ..write('visibleToAi: $visibleToAi')
           ..write(')'))
         .toString();
   }
@@ -7740,6 +7817,8 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
     content,
     orderIndex,
     timestamp,
+    type,
+    visibleToAi,
   );
   @override
   bool operator ==(Object other) =>
@@ -7751,7 +7830,9 @@ class GroupMessage extends DataClass implements Insertable<GroupMessage> {
           other.role == this.role &&
           other.content == this.content &&
           other.orderIndex == this.orderIndex &&
-          other.timestamp == this.timestamp);
+          other.timestamp == this.timestamp &&
+          other.type == this.type &&
+          other.visibleToAi == this.visibleToAi);
 }
 
 class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
@@ -7762,6 +7843,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
   final Value<String> content;
   final Value<int> orderIndex;
   final Value<int> timestamp;
+  final Value<String?> type;
+  final Value<bool> visibleToAi;
   final Value<int> rowid;
   const GroupMessagesCompanion({
     this.id = const Value.absent(),
@@ -7771,6 +7854,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
     this.content = const Value.absent(),
     this.orderIndex = const Value.absent(),
     this.timestamp = const Value.absent(),
+    this.type = const Value.absent(),
+    this.visibleToAi = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   GroupMessagesCompanion.insert({
@@ -7781,6 +7866,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
     required String content,
     required int orderIndex,
     required int timestamp,
+    this.type = const Value.absent(),
+    this.visibleToAi = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        groupId = Value(groupId),
@@ -7796,6 +7883,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
     Expression<String>? content,
     Expression<int>? orderIndex,
     Expression<int>? timestamp,
+    Expression<String>? type,
+    Expression<bool>? visibleToAi,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -7807,6 +7896,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
       if (content != null) 'content': content,
       if (orderIndex != null) 'order_index': orderIndex,
       if (timestamp != null) 'timestamp': timestamp,
+      if (type != null) 'type': type,
+      if (visibleToAi != null) 'visible_to_ai': visibleToAi,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7819,6 +7910,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
     Value<String>? content,
     Value<int>? orderIndex,
     Value<int>? timestamp,
+    Value<String?>? type,
+    Value<bool>? visibleToAi,
     Value<int>? rowid,
   }) {
     return GroupMessagesCompanion(
@@ -7829,6 +7922,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
       content: content ?? this.content,
       orderIndex: orderIndex ?? this.orderIndex,
       timestamp: timestamp ?? this.timestamp,
+      type: type ?? this.type,
+      visibleToAi: visibleToAi ?? this.visibleToAi,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7857,6 +7952,12 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
     if (timestamp.present) {
       map['timestamp'] = Variable<int>(timestamp.value);
     }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (visibleToAi.present) {
+      map['visible_to_ai'] = Variable<bool>(visibleToAi.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -7873,6 +7974,8 @@ class GroupMessagesCompanion extends UpdateCompanion<GroupMessage> {
           ..write('content: $content, ')
           ..write('orderIndex: $orderIndex, ')
           ..write('timestamp: $timestamp, ')
+          ..write('type: $type, ')
+          ..write('visibleToAi: $visibleToAi, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -19171,6 +19274,8 @@ typedef $$GroupMessagesTableCreateCompanionBuilder =
       required String content,
       required int orderIndex,
       required int timestamp,
+      Value<String?> type,
+      Value<bool> visibleToAi,
       Value<int> rowid,
     });
 typedef $$GroupMessagesTableUpdateCompanionBuilder =
@@ -19182,6 +19287,8 @@ typedef $$GroupMessagesTableUpdateCompanionBuilder =
       Value<String> content,
       Value<int> orderIndex,
       Value<int> timestamp,
+      Value<String?> type,
+      Value<bool> visibleToAi,
       Value<int> rowid,
     });
 
@@ -19250,6 +19357,16 @@ class $$GroupMessagesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get visibleToAi => $composableBuilder(
+    column: $table.visibleToAi,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$GroupsTableFilterComposer get groupId {
     final $$GroupsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -19313,6 +19430,16 @@ class $$GroupMessagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get visibleToAi => $composableBuilder(
+    column: $table.visibleToAi,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$GroupsTableOrderingComposer get groupId {
     final $$GroupsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -19367,6 +19494,14 @@ class $$GroupMessagesTableAnnotationComposer
 
   GeneratedColumn<int> get timestamp =>
       $composableBuilder(column: $table.timestamp, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<bool> get visibleToAi => $composableBuilder(
+    column: $table.visibleToAi,
+    builder: (column) => column,
+  );
 
   $$GroupsTableAnnotationComposer get groupId {
     final $$GroupsTableAnnotationComposer composer = $composerBuilder(
@@ -19427,6 +19562,8 @@ class $$GroupMessagesTableTableManager
                 Value<String> content = const Value.absent(),
                 Value<int> orderIndex = const Value.absent(),
                 Value<int> timestamp = const Value.absent(),
+                Value<String?> type = const Value.absent(),
+                Value<bool> visibleToAi = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GroupMessagesCompanion(
                 id: id,
@@ -19436,6 +19573,8 @@ class $$GroupMessagesTableTableManager
                 content: content,
                 orderIndex: orderIndex,
                 timestamp: timestamp,
+                type: type,
+                visibleToAi: visibleToAi,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -19447,6 +19586,8 @@ class $$GroupMessagesTableTableManager
                 required String content,
                 required int orderIndex,
                 required int timestamp,
+                Value<String?> type = const Value.absent(),
+                Value<bool> visibleToAi = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GroupMessagesCompanion.insert(
                 id: id,
@@ -19456,6 +19597,8 @@ class $$GroupMessagesTableTableManager
                 content: content,
                 orderIndex: orderIndex,
                 timestamp: timestamp,
+                type: type,
+                visibleToAi: visibleToAi,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

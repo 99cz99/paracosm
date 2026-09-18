@@ -109,6 +109,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                     );
                   }
                   final msg = reversed[isStreaming ? index - 1 : index];
+                  if (msg.type == 'command_reply' || msg.role == 'system') {
+                    return _systemBubble(context, msg.content);
+                  }
                   final isUser = msg.role == 'user';
                   final member = memberById[msg.speakerCharacterId];
                   final speaker =
@@ -204,6 +207,30 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _systemBubble(BuildContext context, String content) {
+    final scheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
+        constraints: const BoxConstraints(maxWidth: 320),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          content,
+          style: TextStyle(
+            fontSize: 12,
+            color: scheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
       ),
     );
   }

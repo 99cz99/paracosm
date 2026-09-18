@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/commands/slash_commands.dart';
 import '../../../core/db/database.dart';
 import '../../../core/network/llm/llm_provider.dart';
 import '../../../core/network/llm/provider_factory.dart';
@@ -50,6 +51,13 @@ class GroupChatController extends Notifier<GroupChatUiState> {
   Future<void> sendMessage(String groupId, String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.isGenerating) return;
+
+    // Slash commands run locally and never touch the LLM.
+    if (trimmed.startsWith('/')) {
+      await _runGroupCommand(groupId, trimmed);
+      return;
+    }
+
     _cancelling = false;
     final db = ref.read(dbProvider);
 
@@ -317,5 +325,48 @@ class GroupChatController extends Notifier<GroupChatUiState> {
     _cancelling = true;
     _currentProvider?.cancel();
     state = const GroupChatUiState();
+  }
+
+  /// Executes a slash command locally in the group: persists the user command +
+  /// the app's reply as non-AI-visible messages, without calling the LLM.
+  Future<void> _runGroupCommand(String groupId, String text) async {
+    final db = ref.read(dbProvider);
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final userIdx = await db.nextGroupOrderIndex(groupId);
+    await db.insertGroupMessage(GroupMessagesCompanion.insert(
+      id: _uuid.v4(),
+      groupId: groupId,
+      role: 'user',
+      content: text,
+      orderIndex: userIdx,
+      timestamp: now,
+      type: const Value('command'),
+      visibleToAi: const Value(false),
+    ));
+    await db.touchGroup(groupId, now);
+
+    String reply;
+    try {
+      final group = await db.getGroup(groupId);
+      reply = group == null
+          ? '群聊不存在'
+          : await executeGroupCommand(db, group, text);
+    } catch (e) {
+      reply = '指令执行失败：$e';
+    }
+
+    final replyIdx = await db.nextGroupOrderIndex(groupId);
+    await db.insertGroupMessage(GroupMessagesCompanion.insert(
+      id: _uuid.v4(),
+      groupId: groupId,
+      role: 'system',
+      content: reply,
+      orderIndex: replyIdx,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      type: const Value('command_reply'),
+      visibleToAi: const Value(false),
+    ));
+    await db.touchGroup(groupId, DateTime.now().millisecondsSinceEpoch);
   }
 }

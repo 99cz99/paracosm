@@ -28,8 +28,9 @@ class GroupService {
     final groupMemoryRow = await _db.getGroupMemory(groupId);
     final summaryIndex = groupMemoryRow?.summaryIndex ?? 0;
     final allMessages = await _db.getGroupMessages(groupId);
-    final history =
-        allMessages.where((m) => m.orderIndex >= summaryIndex).toList();
+    final history = allMessages
+        .where((m) => m.orderIndex >= summaryIndex && m.visibleToAi)
+        .toList();
     final pairs = await _db.getPairRelations(groupId);
 
     final worldIds = await _db.getGroupWorldIds(groupId);
@@ -86,7 +87,9 @@ class GroupService {
   Future<void> extractPairRelations(String groupId, LlmProvider provider) async {
     final members = await _db.watchMembersFor(groupId).first;
     if (members.length < 2) return;
-    final history = await _db.getGroupMessages(groupId);
+    final history = (await _db.getGroupMessages(groupId))
+        .where((m) => m.visibleToAi)
+        .toList();
     final pairs = _pairs(members);
     final existing = await _db.getPairRelations(groupId);
     final existingMap = <String, String>{
