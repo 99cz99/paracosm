@@ -172,15 +172,13 @@ void main() {
     await db.close();
   });
 
-  test('/lore lists built-in worldbook entries', () async {
+  test('/lore lists bound worldbook names', () async {
     final db = _db();
     await db.insertCharacter(CharactersCompanion.insert(
       id: 'c1',
       name: '测试角色',
       corePersonaJson: '{"personality":"温柔"}',
-      worldbookJson: const Value(
-          '{"entries":[{"comment":"图书馆","keys":["图书馆"],"content":"..."},'
-          '{"comment":"操场","keys":["操场"],"enabled":false,"content":"..."}]}'),
+      worldbookJson: const Value('{"name":"宁宁内置","entries":[]}'),
       sourceType: 'manual',
       createdAt: 1,
       updatedAt: 1,
@@ -196,9 +194,7 @@ void main() {
 
     final reply = await executeCommand(db, session, '/lore');
     expect(reply, contains('【角色世界书】'));
-    expect(reply, contains('1. 图书馆'));
-    expect(reply, contains('关键词：图书馆'));
-    expect(reply, isNot(contains('操场'))); // disabled entry skipped
+    expect(reply, contains('宁宁内置'));
     await db.close();
   });
 
@@ -206,7 +202,7 @@ void main() {
     final db = _db();
     final session = await _insertSession(db);
     final reply = await executeCommand(db, session, '/lore');
-    expect(reply, contains('暂无世界书条目'));
+    expect(reply, contains('暂无世界书'));
     await db.close();
   });
 
@@ -238,4 +234,142 @@ void main() {
     expect(await executeCommand(db, session, '/mode'), contains('此指令仅群聊可用'));
     await db.close();
   });
+
+  test('/lore reads the session-level worldbook selection', () async {
+    final db = _db();
+    await db.insertCharacter(CharactersCompanion.insert(
+      id: 'c1',
+      name: '测试角色',
+      corePersonaJson: '{"personality":"温柔"}',
+      sourceType: 'manual',
+      createdAt: 1,
+      updatedAt: 1,
+    ));
+    await db.insertWorldbook(WorldbooksCompanion.insert(
+      id: 'wb1',
+      name: '共享世界书',
+      bookJson: const Value(
+          '{"entries":[{"comment":"图书馆","keys":["图书馆"],"content":"..."}]}'),
+      createdAt: 1,
+      updatedAt: 1,
+    ));
+    await db.insertSession(SessionsCompanion.insert(
+      id: 's1',
+      characterId: 'c1',
+      worldbookIdsJson: const Value('["wb1"]'),
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 1,
+    ));
+    final session = (await db.getSession('s1'))!;
+
+    final reply = await executeCommand(db, session, '/lore');
+    expect(reply, contains('共享世界书'));
+    await db.close();
+  });
+
+  test('/status in group chat shows group state', () async {
+    final db = _db();
+    final group = await _groupWithMembers(db);
+    await db.upsertGroupMemory(GroupMemoriesCompanion.insert(
+      groupId: 'g1',
+      stateJson: const Value('{"scene":"森林","facts":["遇到狼"]}'),
+      updatedAt: 1,
+    ));
+
+    final reply = await executeGroupCommand(db, group, '/status');
+    expect(reply, contains('场景：森林'));
+    await db.close();
+  });
+
+  test('/summary in group chat shows group summary', () async {
+    final db = _db();
+    final group = await _groupWithMembers(db);
+    await db.upsertGroupMemory(GroupMemoriesCompanion.insert(
+      groupId: 'g1',
+      summaryText: const Value('大家去了森林。'),
+      updatedAt: 1,
+    ));
+
+    final reply = await executeGroupCommand(db, group, '/summary');
+    expect(reply, contains('大家去了森林'));
+    await db.close();
+  });
+
+  test('/relation in group chat shows all members', () async {
+    final db = _db();
+    final group = await _groupWithMembers(db);
+    await db.upsertCharacterRelation(CharacterRelationsCompanion.insert(
+      characterId: 'c1',
+      worldId: const Value(''),
+      relationJson: const Value('{"affection":5}'),
+      updatedAt: 1,
+    ));
+    await db.upsertCharacterRelation(CharacterRelationsCompanion.insert(
+      characterId: 'c2',
+      worldId: const Value(''),
+      relationJson: const Value('{"affection":3}'),
+      updatedAt: 1,
+    ));
+
+    final reply = await executeGroupCommand(db, group, '/relation');
+    expect(reply, contains('小明'));
+    expect(reply, contains('小红'));
+    await db.close();
+  });
+
+  test('/lore in group chat shows group-bound worldbook names', () async {
+    final db = _db();
+    final group = await _groupWithMembers(db);
+    await db.insertWorldbook(WorldbooksCompanion.insert(
+      id: 'wb1',
+      name: '群聊世界书',
+      createdAt: 1,
+      updatedAt: 1,
+    ));
+    await db.bindGroupWorldbook('g1', 'wb1', 1);
+
+    final reply = await executeGroupCommand(db, group, '/lore');
+    expect(reply, contains('群聊世界书'));
+    await db.close();
+  });
+}
+
+Future<Group> _groupWithMembers(AppDatabase db) async {
+  await db.insertCharacter(CharactersCompanion.insert(
+    id: 'c1',
+    name: '小明',
+    corePersonaJson: '{}',
+    sourceType: 'manual',
+    createdAt: 1,
+    updatedAt: 1,
+  ));
+  await db.insertCharacter(CharactersCompanion.insert(
+    id: 'c2',
+    name: '小红',
+    corePersonaJson: '{}',
+    sourceType: 'manual',
+    createdAt: 1,
+    updatedAt: 1,
+  ));
+  await db.insertGroup(GroupsCompanion.insert(
+    id: 'g1',
+    name: '测试群',
+    createdAt: 1,
+    updatedAt: 1,
+    lastMessageAt: 1,
+  ));
+  await db.insertMember(GroupMembersCompanion.insert(
+    id: 'm1',
+    groupId: 'g1',
+    characterId: 'c1',
+    joinOrder: 0,
+  ));
+  await db.insertMember(GroupMembersCompanion.insert(
+    id: 'm2',
+    groupId: 'g1',
+    characterId: 'c2',
+    joinOrder: 1,
+  ));
+  return (await db.getGroup('g1'))!;
 }

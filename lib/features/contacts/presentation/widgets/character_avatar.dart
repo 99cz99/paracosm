@@ -18,23 +18,38 @@ class CharacterAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (avatarPath != null &&
-        avatarPath!.isNotEmpty &&
-        File(avatarPath!).existsSync()) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundImage: FileImage(File(avatarPath!)),
-      );
-    }
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: _colorFor(name),
-      child: Text(
-        name.isEmpty ? '?' : name.characters.first,
-        style: TextStyle(color: Colors.white, fontSize: radius * 0.9),
+    final hasPath = avatarPath != null && avatarPath!.isNotEmpty;
+    // Decode at display size (thumbnail) instead of the full-size source —
+    // cropping keeps the original resolution, so decoding 40px avatars from a
+    // 2000px image would otherwise jank the list when many load at once.
+    final pixel =
+        (radius * 2 * MediaQuery.of(context).devicePixelRatio).round();
+    return SizedBox(
+      width: radius * 2,
+      height: radius * 2,
+      child: ClipOval(
+        child: hasPath
+            ? Image.file(
+                File(avatarPath!),
+                fit: BoxFit.cover,
+                cacheWidth: pixel,
+                cacheHeight: pixel,
+                // File missing → fall back to the initial (async, no sync I/O).
+                errorBuilder: (_, _, _) => _initial(),
+              )
+            : _initial(),
       ),
     );
   }
+
+  Widget _initial() => Container(
+        color: _colorFor(name),
+        alignment: Alignment.center,
+        child: Text(
+          name.isEmpty ? '?' : name.characters.first,
+          style: TextStyle(color: Colors.white, fontSize: radius * 0.9),
+        ),
+      );
 
   Color _colorFor(String name) {
     const palette = [

@@ -18,14 +18,12 @@ import '../data/group_speaker.dart';
 
 class GroupChatUiState {
   const GroupChatUiState({
-    this.streamingText,
-    this.streamingSpeakerId,
+    this.streamingSegments = const [],
     this.streamingGroupId,
     this.isGenerating = false,
   });
 
-  final String? streamingText;
-  final String? streamingSpeakerId;
+  final List<({String? speakerId, String content})> streamingSegments;
   final String? streamingGroupId;
   final bool isGenerating;
 }
@@ -110,8 +108,6 @@ class GroupChatController extends Notifier<GroupChatUiState> {
     _currentProvider = provider;
     state = GroupChatUiState(
       isGenerating: true,
-      streamingText: '',
-      streamingSpeakerId: forcedSpeakerId,
       streamingGroupId: groupId,
     );
 
@@ -123,11 +119,12 @@ class GroupChatController extends Notifier<GroupChatUiState> {
         final delta = chunk.textDelta;
         if (delta != null && delta.isNotEmpty) {
           buffer.write(delta);
-          final stripped = _stripStreamingPrefix(buffer.toString(), members);
           state = GroupChatUiState(
             isGenerating: true,
-            streamingText: stripped.text,
-            streamingSpeakerId: stripped.speakerId ?? forcedSpeakerId,
+            // Split on the fly so each character gets its own streaming bubble
+            // (auto mode emits multiple `名字：` replies in one response).
+            streamingSegments:
+                _parseReplies(buffer.toString(), forcedSpeakerId, members),
             streamingGroupId: groupId,
           );
         }
@@ -243,37 +240,6 @@ class GroupChatController extends Notifier<GroupChatUiState> {
       ];
     }
     return results;
-  }
-
-  /// Strips a leading `名字：` / `名字:` prefix from the streaming text so the
-  /// speaker's name doesn't leak into the in-progress bubble, and returns the
-  /// matched speaker. Longest name first so `张三` doesn't wrongly match
-  /// `张三丰：`.
-  ({String text, String? speakerId}) _stripStreamingPrefix(
-    String text,
-    List<GroupMemberWithCharacter> members,
-  ) {
-    final sorted = members
-        .where((m) => m.character.name.isNotEmpty)
-        .toList()
-      ..sort(
-          (a, b) => b.character.name.length.compareTo(a.character.name.length));
-    for (final m in sorted) {
-      final name = m.character.name;
-      if (text.startsWith('$name：')) {
-        return (
-          text: text.substring(name.length + 1),
-          speakerId: m.member.characterId,
-        );
-      }
-      if (text.startsWith('$name:')) {
-        return (
-          text: text.substring(name.length + 1),
-          speakerId: m.member.characterId,
-        );
-      }
-    }
-    return (text: text, speakerId: null);
   }
 
   Future<void> _persistAssistant(

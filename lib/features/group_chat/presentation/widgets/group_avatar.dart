@@ -22,9 +22,9 @@ class GroupAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (avatarPath != null &&
-        avatarPath!.isNotEmpty &&
-        File(avatarPath!).existsSync()) {
+    final hasPath = avatarPath != null && avatarPath!.isNotEmpty;
+    if (hasPath) {
+      final pixel = (size * MediaQuery.of(context).devicePixelRatio).round();
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.file(
@@ -32,10 +32,17 @@ class GroupAvatar extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
+          cacheWidth: pixel,
+          cacheHeight: pixel,
+          // File missing → fall back to the member grid (async, no sync I/O).
+          errorBuilder: (ctx, _, _) => _memberGrid(ctx),
         ),
       );
     }
+    return _memberGrid(context);
+  }
 
+  Widget _memberGrid(BuildContext context) {
     final shown = members.take(9).toList();
     if (shown.isEmpty) return Icon(Icons.group, size: size);
 

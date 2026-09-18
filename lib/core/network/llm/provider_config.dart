@@ -14,6 +14,7 @@ class LlmProviderConfig {
     this.apiKey = '',
     this.extraParams = const {},
     this.memoryModel,
+    this.contextWindowLimit,
   });
 
   final String id;
@@ -26,6 +27,9 @@ class LlmProviderConfig {
 
   /// 记忆抽取/摘要用的模型名；为 null 时用 [model]。
   final String? memoryModel;
+
+  /// 模型上下文窗口上限（token 数）；为 null 时用默认 32000。
+  final int? contextWindowLimit;
 }
 
 /// Built-in presets shown in the provider settings screen (no API key).

@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
+import '../../../core/utils/avatar_image.dart';
 
 class GroupRepository {
   GroupRepository(this._db);
@@ -132,12 +133,19 @@ class GroupRepository {
         ),
       );
 
-  Future<String> saveGroupAvatar(List<int> bytes, String ext) async {
+  Future<String> saveGroupAvatar(List<int> bytes, {String? oldPath}) async {
     final dir = await getApplicationDocumentsDirectory();
     final avatarDir = Directory(p.join(dir.path, 'avatars'));
     await avatarDir.create(recursive: true);
-    final file = File(p.join(avatarDir.path, '${_uuid.v4()}.$ext'));
-    await file.writeAsBytes(bytes);
+    final file = File(p.join(avatarDir.path, '${_uuid.v4()}.png'));
+    await file.writeAsBytes(resizeAvatarPng(bytes));
+    if (oldPath != null && oldPath.isNotEmpty) {
+      try {
+        await File(oldPath).delete();
+      } catch (_) {
+        // Best-effort: a missing/held old file shouldn't fail the save.
+      }
+    }
     return file.path;
   }
 }

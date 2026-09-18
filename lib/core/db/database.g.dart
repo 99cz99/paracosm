@@ -1852,6 +1852,17 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _worldbookIdsJsonMeta = const VerificationMeta(
+    'worldbookIdsJson',
+  );
+  @override
+  late final GeneratedColumn<String> worldbookIdsJson = GeneratedColumn<String>(
+    'worldbook_ids_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1901,6 +1912,7 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     maxTokens,
     presencePenalty,
     frequencyPenalty,
+    worldbookIdsJson,
     createdAt,
     updatedAt,
     lastMessageAt,
@@ -2023,6 +2035,15 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         ),
       );
     }
+    if (data.containsKey('worldbook_ids_json')) {
+      context.handle(
+        _worldbookIdsJsonMeta,
+        worldbookIdsJson.isAcceptableOrUnknown(
+          data['worldbook_ids_json']!,
+          _worldbookIdsJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2115,6 +2136,10 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.double,
         data['${effectivePrefix}frequency_penalty'],
       ),
+      worldbookIdsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}worldbook_ids_json'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -2161,6 +2186,9 @@ class Session extends DataClass implements Insertable<Session> {
   final int? maxTokens;
   final double? presencePenalty;
   final double? frequencyPenalty;
+
+  /// 会话级世界书选择（JSON 数组）；null = 用角色绑定默认。
+  final String? worldbookIdsJson;
   final int createdAt;
   final int updatedAt;
   final int lastMessageAt;
@@ -2179,6 +2207,7 @@ class Session extends DataClass implements Insertable<Session> {
     this.maxTokens,
     this.presencePenalty,
     this.frequencyPenalty,
+    this.worldbookIdsJson,
     required this.createdAt,
     required this.updatedAt,
     required this.lastMessageAt,
@@ -2222,6 +2251,9 @@ class Session extends DataClass implements Insertable<Session> {
     if (!nullToAbsent || frequencyPenalty != null) {
       map['frequency_penalty'] = Variable<double>(frequencyPenalty);
     }
+    if (!nullToAbsent || worldbookIdsJson != null) {
+      map['worldbook_ids_json'] = Variable<String>(worldbookIdsJson);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     map['last_message_at'] = Variable<int>(lastMessageAt);
@@ -2264,6 +2296,9 @@ class Session extends DataClass implements Insertable<Session> {
       frequencyPenalty: frequencyPenalty == null && nullToAbsent
           ? const Value.absent()
           : Value(frequencyPenalty),
+      worldbookIdsJson: worldbookIdsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(worldbookIdsJson),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       lastMessageAt: Value(lastMessageAt),
@@ -2292,6 +2327,7 @@ class Session extends DataClass implements Insertable<Session> {
       maxTokens: serializer.fromJson<int?>(json['maxTokens']),
       presencePenalty: serializer.fromJson<double?>(json['presencePenalty']),
       frequencyPenalty: serializer.fromJson<double?>(json['frequencyPenalty']),
+      worldbookIdsJson: serializer.fromJson<String?>(json['worldbookIdsJson']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       lastMessageAt: serializer.fromJson<int>(json['lastMessageAt']),
@@ -2315,6 +2351,7 @@ class Session extends DataClass implements Insertable<Session> {
       'maxTokens': serializer.toJson<int?>(maxTokens),
       'presencePenalty': serializer.toJson<double?>(presencePenalty),
       'frequencyPenalty': serializer.toJson<double?>(frequencyPenalty),
+      'worldbookIdsJson': serializer.toJson<String?>(worldbookIdsJson),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'lastMessageAt': serializer.toJson<int>(lastMessageAt),
@@ -2336,6 +2373,7 @@ class Session extends DataClass implements Insertable<Session> {
     Value<int?> maxTokens = const Value.absent(),
     Value<double?> presencePenalty = const Value.absent(),
     Value<double?> frequencyPenalty = const Value.absent(),
+    Value<String?> worldbookIdsJson = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     int? lastMessageAt,
@@ -2360,6 +2398,9 @@ class Session extends DataClass implements Insertable<Session> {
     frequencyPenalty: frequencyPenalty.present
         ? frequencyPenalty.value
         : this.frequencyPenalty,
+    worldbookIdsJson: worldbookIdsJson.present
+        ? worldbookIdsJson.value
+        : this.worldbookIdsJson,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -2396,6 +2437,9 @@ class Session extends DataClass implements Insertable<Session> {
       frequencyPenalty: data.frequencyPenalty.present
           ? data.frequencyPenalty.value
           : this.frequencyPenalty,
+      worldbookIdsJson: data.worldbookIdsJson.present
+          ? data.worldbookIdsJson.value
+          : this.worldbookIdsJson,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       lastMessageAt: data.lastMessageAt.present
@@ -2421,6 +2465,7 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('maxTokens: $maxTokens, ')
           ..write('presencePenalty: $presencePenalty, ')
           ..write('frequencyPenalty: $frequencyPenalty, ')
+          ..write('worldbookIdsJson: $worldbookIdsJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessageAt: $lastMessageAt')
@@ -2444,6 +2489,7 @@ class Session extends DataClass implements Insertable<Session> {
     maxTokens,
     presencePenalty,
     frequencyPenalty,
+    worldbookIdsJson,
     createdAt,
     updatedAt,
     lastMessageAt,
@@ -2466,6 +2512,7 @@ class Session extends DataClass implements Insertable<Session> {
           other.maxTokens == this.maxTokens &&
           other.presencePenalty == this.presencePenalty &&
           other.frequencyPenalty == this.frequencyPenalty &&
+          other.worldbookIdsJson == this.worldbookIdsJson &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.lastMessageAt == this.lastMessageAt);
@@ -2486,6 +2533,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<int?> maxTokens;
   final Value<double?> presencePenalty;
   final Value<double?> frequencyPenalty;
+  final Value<String?> worldbookIdsJson;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> lastMessageAt;
@@ -2505,6 +2553,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.maxTokens = const Value.absent(),
     this.presencePenalty = const Value.absent(),
     this.frequencyPenalty = const Value.absent(),
+    this.worldbookIdsJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastMessageAt = const Value.absent(),
@@ -2525,6 +2574,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.maxTokens = const Value.absent(),
     this.presencePenalty = const Value.absent(),
     this.frequencyPenalty = const Value.absent(),
+    this.worldbookIdsJson = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     required int lastMessageAt,
@@ -2549,6 +2599,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<int>? maxTokens,
     Expression<double>? presencePenalty,
     Expression<double>? frequencyPenalty,
+    Expression<String>? worldbookIdsJson,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? lastMessageAt,
@@ -2570,6 +2621,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       if (maxTokens != null) 'max_tokens': maxTokens,
       if (presencePenalty != null) 'presence_penalty': presencePenalty,
       if (frequencyPenalty != null) 'frequency_penalty': frequencyPenalty,
+      if (worldbookIdsJson != null) 'worldbook_ids_json': worldbookIdsJson,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastMessageAt != null) 'last_message_at': lastMessageAt,
@@ -2592,6 +2644,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Value<int?>? maxTokens,
     Value<double?>? presencePenalty,
     Value<double?>? frequencyPenalty,
+    Value<String?>? worldbookIdsJson,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? lastMessageAt,
@@ -2612,6 +2665,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       maxTokens: maxTokens ?? this.maxTokens,
       presencePenalty: presencePenalty ?? this.presencePenalty,
       frequencyPenalty: frequencyPenalty ?? this.frequencyPenalty,
+      worldbookIdsJson: worldbookIdsJson ?? this.worldbookIdsJson,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -2664,6 +2718,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (frequencyPenalty.present) {
       map['frequency_penalty'] = Variable<double>(frequencyPenalty.value);
     }
+    if (worldbookIdsJson.present) {
+      map['worldbook_ids_json'] = Variable<String>(worldbookIdsJson.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -2696,6 +2753,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('maxTokens: $maxTokens, ')
           ..write('presencePenalty: $presencePenalty, ')
           ..write('frequencyPenalty: $frequencyPenalty, ')
+          ..write('worldbookIdsJson: $worldbookIdsJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessageAt: $lastMessageAt, ')
@@ -4778,6 +4836,16 @@ class $ProviderConfigsTable extends ProviderConfigs
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _contextWindowLimitMeta =
+      const VerificationMeta('contextWindowLimit');
+  @override
+  late final GeneratedColumn<int> contextWindowLimit = GeneratedColumn<int>(
+    'context_window_limit',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isDefaultMeta = const VerificationMeta(
     'isDefault',
   );
@@ -4825,6 +4893,7 @@ class $ProviderConfigsTable extends ProviderConfigs
     apiKeyRef,
     extraParamsJson,
     memoryModel,
+    contextWindowLimit,
     isDefault,
     createdAt,
     updatedAt,
@@ -4902,6 +4971,15 @@ class $ProviderConfigsTable extends ProviderConfigs
         ),
       );
     }
+    if (data.containsKey('context_window_limit')) {
+      context.handle(
+        _contextWindowLimitMeta,
+        contextWindowLimit.isAcceptableOrUnknown(
+          data['context_window_limit']!,
+          _contextWindowLimitMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_default')) {
       context.handle(
         _isDefaultMeta,
@@ -4965,6 +5043,10 @@ class $ProviderConfigsTable extends ProviderConfigs
         DriftSqlType.string,
         data['${effectivePrefix}memory_model'],
       ),
+      contextWindowLimit: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}context_window_limit'],
+      ),
       isDefault: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_default'],
@@ -5001,6 +5083,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
 
   /// 记忆抽取/摘要用的模型名（可选，留空则用 [model]；用于「便宜模型」）。
   final String? memoryModel;
+
+  /// 模型上下文窗口上限（token 数），用于实时 token 显示；null = 用默认 32000。
+  final int? contextWindowLimit;
   final bool isDefault;
   final int createdAt;
   final int updatedAt;
@@ -5013,6 +5098,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     required this.apiKeyRef,
     required this.extraParamsJson,
     this.memoryModel,
+    this.contextWindowLimit,
     required this.isDefault,
     required this.createdAt,
     required this.updatedAt,
@@ -5029,6 +5115,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     map['extra_params_json'] = Variable<String>(extraParamsJson);
     if (!nullToAbsent || memoryModel != null) {
       map['memory_model'] = Variable<String>(memoryModel);
+    }
+    if (!nullToAbsent || contextWindowLimit != null) {
+      map['context_window_limit'] = Variable<int>(contextWindowLimit);
     }
     map['is_default'] = Variable<bool>(isDefault);
     map['created_at'] = Variable<int>(createdAt);
@@ -5048,6 +5137,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       memoryModel: memoryModel == null && nullToAbsent
           ? const Value.absent()
           : Value(memoryModel),
+      contextWindowLimit: contextWindowLimit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contextWindowLimit),
       isDefault: Value(isDefault),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -5068,6 +5160,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       apiKeyRef: serializer.fromJson<String>(json['apiKeyRef']),
       extraParamsJson: serializer.fromJson<String>(json['extraParamsJson']),
       memoryModel: serializer.fromJson<String?>(json['memoryModel']),
+      contextWindowLimit: serializer.fromJson<int?>(json['contextWindowLimit']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
@@ -5085,6 +5178,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       'apiKeyRef': serializer.toJson<String>(apiKeyRef),
       'extraParamsJson': serializer.toJson<String>(extraParamsJson),
       'memoryModel': serializer.toJson<String?>(memoryModel),
+      'contextWindowLimit': serializer.toJson<int?>(contextWindowLimit),
       'isDefault': serializer.toJson<bool>(isDefault),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
@@ -5100,6 +5194,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     String? apiKeyRef,
     String? extraParamsJson,
     Value<String?> memoryModel = const Value.absent(),
+    Value<int?> contextWindowLimit = const Value.absent(),
     bool? isDefault,
     int? createdAt,
     int? updatedAt,
@@ -5112,6 +5207,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     apiKeyRef: apiKeyRef ?? this.apiKeyRef,
     extraParamsJson: extraParamsJson ?? this.extraParamsJson,
     memoryModel: memoryModel.present ? memoryModel.value : this.memoryModel,
+    contextWindowLimit: contextWindowLimit.present
+        ? contextWindowLimit.value
+        : this.contextWindowLimit,
     isDefault: isDefault ?? this.isDefault,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -5130,6 +5228,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       memoryModel: data.memoryModel.present
           ? data.memoryModel.value
           : this.memoryModel,
+      contextWindowLimit: data.contextWindowLimit.present
+          ? data.contextWindowLimit.value
+          : this.contextWindowLimit,
       isDefault: data.isDefault.present ? data.isDefault.value : this.isDefault,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -5147,6 +5248,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
           ..write('apiKeyRef: $apiKeyRef, ')
           ..write('extraParamsJson: $extraParamsJson, ')
           ..write('memoryModel: $memoryModel, ')
+          ..write('contextWindowLimit: $contextWindowLimit, ')
           ..write('isDefault: $isDefault, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -5164,6 +5266,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     apiKeyRef,
     extraParamsJson,
     memoryModel,
+    contextWindowLimit,
     isDefault,
     createdAt,
     updatedAt,
@@ -5180,6 +5283,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
           other.apiKeyRef == this.apiKeyRef &&
           other.extraParamsJson == this.extraParamsJson &&
           other.memoryModel == this.memoryModel &&
+          other.contextWindowLimit == this.contextWindowLimit &&
           other.isDefault == this.isDefault &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -5194,6 +5298,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
   final Value<String> apiKeyRef;
   final Value<String> extraParamsJson;
   final Value<String?> memoryModel;
+  final Value<int?> contextWindowLimit;
   final Value<bool> isDefault;
   final Value<int> createdAt;
   final Value<int> updatedAt;
@@ -5207,6 +5312,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     this.apiKeyRef = const Value.absent(),
     this.extraParamsJson = const Value.absent(),
     this.memoryModel = const Value.absent(),
+    this.contextWindowLimit = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -5221,6 +5327,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     this.apiKeyRef = const Value.absent(),
     this.extraParamsJson = const Value.absent(),
     this.memoryModel = const Value.absent(),
+    this.contextWindowLimit = const Value.absent(),
     this.isDefault = const Value.absent(),
     required int createdAt,
     required int updatedAt,
@@ -5241,6 +5348,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     Expression<String>? apiKeyRef,
     Expression<String>? extraParamsJson,
     Expression<String>? memoryModel,
+    Expression<int>? contextWindowLimit,
     Expression<bool>? isDefault,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
@@ -5255,6 +5363,8 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
       if (apiKeyRef != null) 'api_key_ref': apiKeyRef,
       if (extraParamsJson != null) 'extra_params_json': extraParamsJson,
       if (memoryModel != null) 'memory_model': memoryModel,
+      if (contextWindowLimit != null)
+        'context_window_limit': contextWindowLimit,
       if (isDefault != null) 'is_default': isDefault,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -5271,6 +5381,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     Value<String>? apiKeyRef,
     Value<String>? extraParamsJson,
     Value<String?>? memoryModel,
+    Value<int?>? contextWindowLimit,
     Value<bool>? isDefault,
     Value<int>? createdAt,
     Value<int>? updatedAt,
@@ -5285,6 +5396,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
       apiKeyRef: apiKeyRef ?? this.apiKeyRef,
       extraParamsJson: extraParamsJson ?? this.extraParamsJson,
       memoryModel: memoryModel ?? this.memoryModel,
+      contextWindowLimit: contextWindowLimit ?? this.contextWindowLimit,
       isDefault: isDefault ?? this.isDefault,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -5319,6 +5431,9 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     if (memoryModel.present) {
       map['memory_model'] = Variable<String>(memoryModel.value);
     }
+    if (contextWindowLimit.present) {
+      map['context_window_limit'] = Variable<int>(contextWindowLimit.value);
+    }
     if (isDefault.present) {
       map['is_default'] = Variable<bool>(isDefault.value);
     }
@@ -5345,6 +5460,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
           ..write('apiKeyRef: $apiKeyRef, ')
           ..write('extraParamsJson: $extraParamsJson, ')
           ..write('memoryModel: $memoryModel, ')
+          ..write('contextWindowLimit: $contextWindowLimit, ')
           ..write('isDefault: $isDefault, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -14717,6 +14833,7 @@ typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
   Value<int?> maxTokens,
   Value<double?> presencePenalty,
   Value<double?> frequencyPenalty,
+  Value<String?> worldbookIdsJson,
   required int createdAt,
   required int updatedAt,
   required int lastMessageAt,
@@ -14737,6 +14854,7 @@ typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<int?> maxTokens,
   Value<double?> presencePenalty,
   Value<double?> frequencyPenalty,
+  Value<String?> worldbookIdsJson,
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int> lastMessageAt,
@@ -14873,6 +14991,11 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<double> get frequencyPenalty => $composableBuilder(
     column: $table.frequencyPenalty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get worldbookIdsJson => $composableBuilder(
+    column: $table.worldbookIdsJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15039,6 +15162,11 @@ class $$SessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get worldbookIdsJson => $composableBuilder(
+    column: $table.worldbookIdsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -15137,6 +15265,11 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<double> get frequencyPenalty => $composableBuilder(
     column: $table.frequencyPenalty,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get worldbookIdsJson => $composableBuilder(
+    column: $table.worldbookIdsJson,
     builder: (column) => column,
   );
 
@@ -15271,6 +15404,7 @@ class $$SessionsTableTableManager
                 Value<int?> maxTokens = const Value.absent(),
                 Value<double?> presencePenalty = const Value.absent(),
                 Value<double?> frequencyPenalty = const Value.absent(),
+                Value<String?> worldbookIdsJson = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> lastMessageAt = const Value.absent(),
@@ -15290,6 +15424,7 @@ class $$SessionsTableTableManager
                 maxTokens: maxTokens,
                 presencePenalty: presencePenalty,
                 frequencyPenalty: frequencyPenalty,
+                worldbookIdsJson: worldbookIdsJson,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessageAt: lastMessageAt,
@@ -15311,6 +15446,7 @@ class $$SessionsTableTableManager
                 Value<int?> maxTokens = const Value.absent(),
                 Value<double?> presencePenalty = const Value.absent(),
                 Value<double?> frequencyPenalty = const Value.absent(),
+                Value<String?> worldbookIdsJson = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 required int lastMessageAt,
@@ -15330,6 +15466,7 @@ class $$SessionsTableTableManager
                 maxTokens: maxTokens,
                 presencePenalty: presencePenalty,
                 frequencyPenalty: frequencyPenalty,
+                worldbookIdsJson: worldbookIdsJson,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessageAt: lastMessageAt,
@@ -17143,6 +17280,7 @@ typedef $$ProviderConfigsTableCreateCompanionBuilder =
       Value<String> apiKeyRef,
       Value<String> extraParamsJson,
       Value<String?> memoryModel,
+      Value<int?> contextWindowLimit,
       Value<bool> isDefault,
       required int createdAt,
       required int updatedAt,
@@ -17158,6 +17296,7 @@ typedef $$ProviderConfigsTableUpdateCompanionBuilder =
       Value<String> apiKeyRef,
       Value<String> extraParamsJson,
       Value<String?> memoryModel,
+      Value<int?> contextWindowLimit,
       Value<bool> isDefault,
       Value<int> createdAt,
       Value<int> updatedAt,
@@ -17210,6 +17349,11 @@ class $$ProviderConfigsTableFilterComposer
 
   ColumnFilters<String> get memoryModel => $composableBuilder(
     column: $table.memoryModel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get contextWindowLimit => $composableBuilder(
+    column: $table.contextWindowLimit,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17278,6 +17422,11 @@ class $$ProviderConfigsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get contextWindowLimit => $composableBuilder(
+    column: $table.contextWindowLimit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isDefault => $composableBuilder(
     column: $table.isDefault,
     builder: (column) => ColumnOrderings(column),
@@ -17328,6 +17477,11 @@ class $$ProviderConfigsTableAnnotationComposer
 
   GeneratedColumn<String> get memoryModel => $composableBuilder(
     column: $table.memoryModel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get contextWindowLimit => $composableBuilder(
+    column: $table.contextWindowLimit,
     builder: (column) => column,
   );
 
@@ -17386,6 +17540,7 @@ class $$ProviderConfigsTableTableManager
                 Value<String> apiKeyRef = const Value.absent(),
                 Value<String> extraParamsJson = const Value.absent(),
                 Value<String?> memoryModel = const Value.absent(),
+                Value<int?> contextWindowLimit = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
@@ -17399,6 +17554,7 @@ class $$ProviderConfigsTableTableManager
                 apiKeyRef: apiKeyRef,
                 extraParamsJson: extraParamsJson,
                 memoryModel: memoryModel,
+                contextWindowLimit: contextWindowLimit,
                 isDefault: isDefault,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -17414,6 +17570,7 @@ class $$ProviderConfigsTableTableManager
                 Value<String> apiKeyRef = const Value.absent(),
                 Value<String> extraParamsJson = const Value.absent(),
                 Value<String?> memoryModel = const Value.absent(),
+                Value<int?> contextWindowLimit = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
@@ -17427,6 +17584,7 @@ class $$ProviderConfigsTableTableManager
                 apiKeyRef: apiKeyRef,
                 extraParamsJson: extraParamsJson,
                 memoryModel: memoryModel,
+                contextWindowLimit: contextWindowLimit,
                 isDefault: isDefault,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

@@ -176,6 +176,14 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
             await m.addColumn(groupMessages, groupMessages.type);
             await m.addColumn(groupMessages, groupMessages.visibleToAi);
           }
+          if (from < 13) {
+            // Per-provider model context window, for the realtime token display.
+            await m.addColumn(providerConfigs, providerConfigs.contextWindowLimit);
+          }
+          if (from < 14) {
+            // Session-level worldbook selection (overrides character binding).
+            await m.addColumn(sessions, sessions.worldbookIdsJson);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -1164,6 +1172,11 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
 
   Future<void> setSetting(String key, String value) => into(settings)
       .insertOnConflictUpdate(SettingsCompanion.insert(key: key, value: value));
+
+  Stream<String?> watchSetting(String key) => (select(settings)
+        ..where((t) => t.key.equals(key)))
+      .watchSingleOrNull()
+      .map((s) => s?.value);
 }
 
 /// Session joined with its character name for list display.

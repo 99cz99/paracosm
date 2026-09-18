@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/utils/avatar_image.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _initBackgroundService();
   runApp(const ProviderScope(child: ParacosmApp()));
+  // Shrink any oversized avatars (character-card PNGs, old full-res crops) in
+  // the background so cold-start reads stay cheap.
+  unawaited(migrateLargeAvatars());
 }
 
 Future<void> _initBackgroundService() async {

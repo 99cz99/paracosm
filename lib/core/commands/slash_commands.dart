@@ -55,7 +55,7 @@ const allSlashCommands = <SlashCommand>[
     category: '世界书',
     description: '查看世界书',
     usage: '/lore',
-    detail: '列出所有可用的世界书条目（角色级 + 世界级），只读。',
+    detail: '列出当前会话绑定的世界书名称（角色级 + 世界级），只读。',
   ),
   SlashCommand(
     name: 'mode',
@@ -169,80 +169,68 @@ Future<String> _summaryCommand(AppDatabase db, Session session) async {
   return '【摘要】\n${summary.isEmpty ? '暂无摘要' : summary}';
 }
 
-/// Builds the /lore reply text: lists available worldbook entries, grouped by
-/// character-level (built-in + character-bound) and world-level (world-bound).
+/// Builds the /lore reply text: lists bound worldbook names, grouped by
+/// character-level (built-in + character/session-bound) and world-level.
 Future<String> _loreCommand(AppDatabase db, Session session) async {
   final character = await db.getCharacter(session.characterId);
-  if (character == null) return '暂无世界书条目';
+  if (character == null) return '暂无世界书';
   final worldId = session.worldId ?? '';
 
-  final charBookJsons = <String>[
+  final charBookNames = <String>[
     if (character.worldbookJson != null &&
         character.worldbookJson!.isNotEmpty &&
         character.worldbookJson != '{}')
-      character.worldbookJson!,
+      _worldbookName(character.worldbookJson!, '内置世界书'),
   ];
-  final charBoundIds = await db.getCharacterWorldbookIds(character.id);
-  for (final b in await db.getWorldbooksByIds(charBoundIds.toSet())) {
-    charBookJsons.add(b.bookJson);
+  final charBoundIds = session.worldbookIdsJson != null
+      ? _parseWorldbookIds(session.worldbookIdsJson!)
+      : (await db.getCharacterWorldbookIds(character.id)).toSet();
+  for (final b in await db.getWorldbooksByIds(charBoundIds)) {
+    charBookNames.add(b.name);
   }
 
   final worldBoundIds = await db.getWorldWorldbookIds(worldId);
-  final worldBookJsons = <String>[];
+  final worldBookNames = <String>[];
   for (final b in await db.getWorldbooksByIds(worldBoundIds.toSet())) {
-    worldBookJsons.add(b.bookJson);
+    worldBookNames.add(b.name);
   }
 
-  final charEntries = _formatLoreEntries(charBookJsons);
-  final worldEntries = _formatLoreEntries(worldBookJsons);
-  if (charEntries.isEmpty && worldEntries.isEmpty) return '暂无世界书条目';
+  if (charBookNames.isEmpty && worldBookNames.isEmpty) return '暂无世界书';
 
   final buffer = StringBuffer();
-  if (charEntries.isNotEmpty) {
+  if (charBookNames.isNotEmpty) {
     buffer.writeln('【角色世界书】');
-    buffer.writeln(charEntries);
+    buffer.writeln(charBookNames.map((n) => '· $n').join('\n'));
   }
-  if (worldEntries.isNotEmpty) {
+  if (worldBookNames.isNotEmpty) {
     if (buffer.isNotEmpty) buffer.writeln();
     buffer.writeln('【世界世界书】');
-    buffer.writeln(worldEntries);
+    buffer.writeln(worldBookNames.map((n) => '· $n').join('\n'));
   }
   return buffer.toString().trimRight();
 }
 
-/// Formats worldbook entries into a numbered list: `1. 标题（关键词：…）`.
-String _formatLoreEntries(List<String> bookJsons) {
-  final lines = <String>[];
-  var n = 1;
-  for (final json in bookJsons) {
-    for (final e in _parseEntries(json)) {
-      if (e['enabled'] == false) continue;
-      final title = (e['comment'] ?? '').toString().trim();
-      if (title.isEmpty) continue;
-      final keys = e['keys'] is List
-          ? (e['keys'] as List)
-              .map((k) => k.toString())
-              .where((k) => k.isNotEmpty)
-              .toList()
-          : <String>[];
-      final keysLine = keys.isEmpty ? '' : '（关键词：${keys.join('、')}）';
-      lines.add('$n. $title$keysLine');
-      n++;
-    }
-  }
-  return lines.join('\n');
-}
-
-/// Parses a worldbook JSON blob into its entry maps.
-List<Map<String, dynamic>> _parseEntries(String bookJson) {
+/// Reads a worldbook JSON's `name`, falling back when absent.
+String _worldbookName(String bookJson, String fallback) {
   try {
     final map = jsonDecode(bookJson) as Map<String, dynamic>;
-    final entries = map['entries'];
-    if (entries is! List) return const [];
-    return entries.whereType<Map<String, dynamic>>().toList();
+    final name = (map['name'] ?? '').toString().trim();
+    return name.isEmpty ? fallback : name;
   } catch (_) {
-    return const [];
+    return fallback;
   }
+}
+
+/// Parses a session's `worldbookIdsJson` (JSON array) into an id set.
+Set<String> _parseWorldbookIds(String raw) {
+  if (raw.isEmpty) return const {};
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is List) {
+      return decoded.map((e) => e.toString()).where((e) => e.isNotEmpty).toSet();
+    }
+  } catch (_) {}
+  return const {};
 }
 
 /// Executes a slash command in a GROUP chat. Supports /mode and /help; other
@@ -261,11 +249,95 @@ Future<String> executeGroupCommand(
   switch (name) {
     case 'help':
       return helpText(arg);
+    case 'status':
+      return await _groupStatusCommand(db, group);
+    case 'relation':
+      return await _groupRelationCommand(db, group, arg);
+    case 'summary':
+      return await _groupSummaryCommand(db, group);
+    case 'lore':
+      return await _groupLoreCommand(db, group);
     case 'mode':
       return await _modeCommand(db, group, arg);
     default:
-      return '未知指令：/$name\n群聊可用指令：/mode、/help';
+      return '未知指令：/$name\n输入 /help 查看所有可用指令。';
   }
+}
+
+/// Builds the group /status reply from the group's structured state.
+Future<String> _groupStatusCommand(AppDatabase db, Group group) async {
+  final memory = await db.getGroupMemory(group.id);
+  final stateLines = _formatState(memory?.stateJson ?? '');
+  return '【当前状态】\n${stateLines.isEmpty ? '暂无状态信息' : stateLines}';
+}
+
+/// Builds the group /summary reply from the group's rolling summary.
+Future<String> _groupSummaryCommand(AppDatabase db, Group group) async {
+  final memory = await db.getGroupMemory(group.id);
+  final summary = memory?.summaryText ?? '';
+  return '【摘要】\n${summary.isEmpty ? '暂无摘要' : summary}';
+}
+
+/// Builds the group /relation reply: every member's relation to the user,
+/// optionally filtered by a character name.
+Future<String> _groupRelationCommand(
+  AppDatabase db,
+  Group group,
+  String? nameArg,
+) async {
+  final members = await db.watchMembersFor(group.id).first;
+  if (members.isEmpty) return '暂无关系信息';
+  final worldId = group.worldId ?? '';
+
+  final name = nameArg?.trim();
+  final filtered = name == null || name.isEmpty
+      ? members
+      : members.where((m) => m.character.name == name).toList();
+
+  final blocks = <String>[];
+  for (final m in filtered) {
+    final text = await _relationText(db, m.character, worldId);
+    if (text.isEmpty) continue;
+    blocks.add('【${m.character.name}】\n$text');
+  }
+
+  if (blocks.isEmpty) {
+    if (name != null && name.isNotEmpty) {
+      final present = members.map((m) => m.character.name).join('、');
+      return '角色「$name」不存在，当前在场：$present';
+    }
+    return '暂无关系信息';
+  }
+  return blocks.join('\n\n');
+}
+
+/// Builds the group /lore reply: group-bound + world-bound worldbook names.
+Future<String> _groupLoreCommand(AppDatabase db, Group group) async {
+  final groupBookNames = <String>[];
+  final groupBoundIds = await db.getGroupWorldbookIds(group.id);
+  for (final b in await db.getWorldbooksByIds(groupBoundIds.toSet())) {
+    groupBookNames.add(b.name);
+  }
+
+  final worldBookNames = <String>[];
+  final worldBoundIds = await db.getWorldWorldbookIds(group.worldId ?? '');
+  for (final b in await db.getWorldbooksByIds(worldBoundIds.toSet())) {
+    worldBookNames.add(b.name);
+  }
+
+  if (groupBookNames.isEmpty && worldBookNames.isEmpty) return '暂无世界书';
+
+  final buffer = StringBuffer();
+  if (groupBookNames.isNotEmpty) {
+    buffer.writeln('【群聊世界书】');
+    buffer.writeln(groupBookNames.map((n) => '· $n').join('\n'));
+  }
+  if (worldBookNames.isNotEmpty) {
+    if (buffer.isNotEmpty) buffer.writeln();
+    buffer.writeln('【世界世界书】');
+    buffer.writeln(worldBookNames.map((n) => '· $n').join('\n'));
+  }
+  return buffer.toString().trimRight();
 }
 
 /// Displays or switches the group's speak mode (auto / turn / call).

@@ -12,6 +12,7 @@ import '../../../core/import/png_card_extractor.dart';
 import '../../../core/import/skill_importer.dart';
 import '../../../core/import/st_card_parser.dart';
 import '../../../core/utils/app_exception.dart';
+import '../../../core/utils/avatar_image.dart';
 
 /// Persists imported characters and their default adaptation.
 class CharacterRepository {
@@ -165,13 +166,23 @@ class CharacterRepository {
     await _db.deleteCharacter(id);
   }
 
-  /// Saves avatar bytes to the app documents dir and returns the path.
-  Future<String> saveAvatar(List<int> bytes, String ext) async {
+  /// Saves avatar bytes to the app documents dir (downscaled to a 256×256 PNG)
+  /// and returns the path. When [oldPath] is given, the old avatar file is
+  /// deleted after the new one is written, so re-setting an avatar doesn't leak
+  /// orphan files.
+  Future<String> saveAvatar(List<int> bytes, {String? oldPath}) async {
     final dir = await getApplicationDocumentsDirectory();
     final avatarDir = Directory(p.join(dir.path, 'avatars'));
     await avatarDir.create(recursive: true);
-    final file = File(p.join(avatarDir.path, '${_uuid.v4()}.$ext'));
-    await file.writeAsBytes(bytes);
+    final file = File(p.join(avatarDir.path, '${_uuid.v4()}.png'));
+    await file.writeAsBytes(resizeAvatarPng(bytes));
+    if (oldPath != null && oldPath.isNotEmpty) {
+      try {
+        await File(oldPath).delete();
+      } catch (_) {
+        // Best-effort: a missing/held old file shouldn't fail the save.
+      }
+    }
     return file.path;
   }
 

@@ -8,8 +8,10 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/backup/backup_service.dart';
+import '../../../core/network/update_checker.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/utils/app_exception.dart';
 import '../../../core/utils/dialogs.dart';
@@ -43,6 +45,15 @@ class ProfileScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/profile/presets'),
           ),
+          SwitchListTile(
+            secondary: const Icon(Icons.speed),
+            title: const Text('实时 Token 显示'),
+            subtitle: const Text('聊天顶部显示当前输入占用的 token 数'),
+            value: ref.watch(tokenDisplayEnabledProvider).value ?? false,
+            onChanged: (v) => ref
+                .read(dbProvider)
+                .setSetting('token_display_enabled', v.toString()),
+          ),
           ListTile(
             leading: const Icon(Icons.search),
             title: const Text('搜索'),
@@ -64,6 +75,12 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => _restore(context, ref),
           ),
           const Divider(),
+          ListTile(
+            leading: const Icon(Icons.system_update),
+            title: const Text('检查更新'),
+            subtitle: const Text('检查 GitHub Releases 是否有新版本'),
+            onTap: () => _checkUpdate(context),
+          ),
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('关于'),
@@ -122,6 +139,36 @@ class ProfileScreen extends ConsumerWidget {
       if (context.mounted) {
         await showErrorDialog(context, e is AppException ? e.message : '恢复失败：$e');
       }
+    }
+  }
+
+  Future<void> _checkUpdate(BuildContext context) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final result = await checkForUpdate();
+
+    if (!context.mounted) return;
+    Navigator.of(context).pop(); // 关闭 loading
+
+    if (!result.hasUpdate) {
+      await showSuccessDialog(context, '已是最新版本');
+      return;
+    }
+
+    final url = result.htmlUrl;
+    final go = await showConfirmDialog(
+      context,
+      title: '发现新版本',
+      message: '新版本 v${result.latestVersion} 已发布。\n前往 GitHub 下载页手动更新？',
+      confirmLabel: '前往下载',
+    );
+    if (go && url != null && url.isNotEmpty) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     }
   }
 }

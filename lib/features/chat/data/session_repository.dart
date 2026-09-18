@@ -18,6 +18,7 @@ class SessionRepository {
     String characterId, {
     String? worldId,
     String? openingMessage,
+    List<String>? worldbookIds,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     // Normalize the default world to '' (not NULL), matching relations /
@@ -31,6 +32,8 @@ class SessionRepository {
       characterId: characterId,
       worldId: Value(normalizedWorldId),
       adaptationId: Value(adaptation?.id),
+      worldbookIdsJson:
+          Value(worldbookIds == null ? null : jsonEncode(worldbookIds)),
       createdAt: now,
       updatedAt: now,
       lastMessageAt: now,
@@ -94,13 +97,22 @@ class SessionRepository {
     String characterId, {
     String? worldId,
     String? openingMessage,
+    List<String>? worldbookIds,
   }) async {
     final existing = await _db.getSessionForCharacter(characterId, worldId);
-    if (existing != null) return existing.id;
+    if (existing != null) {
+      if (worldbookIds != null) {
+        await _db.updateSession(existing.id, SessionsCompanion(
+          worldbookIdsJson: Value(jsonEncode(worldbookIds)),
+        ));
+      }
+      return existing.id;
+    }
     return createSession(
       characterId,
       worldId: worldId,
       openingMessage: openingMessage,
+      worldbookIds: worldbookIds,
     );
   }
 

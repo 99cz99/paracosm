@@ -105,6 +105,7 @@ class ProviderSettingsScreen extends ConsumerWidget {
         apiKeyRef: Value(SecureKeyStore.keyForProvider(id)),
         isDefault: Value(result.isDefault),
         memoryModel: Value(result.memoryModel),
+        contextWindowLimit: Value(result.contextWindowLimit),
         createdAt: now,
         updatedAt: now,
       ));
@@ -118,6 +119,7 @@ class ProviderSettingsScreen extends ConsumerWidget {
         model: Value(result.model),
         isDefault: Value(result.isDefault),
         memoryModel: Value(result.memoryModel),
+        contextWindowLimit: Value(result.contextWindowLimit),
         updatedAt: Value(now),
       ));
       await store.write(SecureKeyStore.keyForProvider(existing.id), result.apiKey);
@@ -195,6 +197,7 @@ class _ProviderFormResult {
     required this.apiKey,
     required this.isDefault,
     this.memoryModel,
+    this.contextWindowLimit,
   });
 
   final String name;
@@ -204,6 +207,7 @@ class _ProviderFormResult {
   final String apiKey;
   final bool isDefault;
   final String? memoryModel;
+  final int? contextWindowLimit;
 }
 
 class _ProviderFormDialog extends StatefulWidget {
@@ -221,6 +225,7 @@ class _ProviderFormDialogState extends State<_ProviderFormDialog> {
   late final TextEditingController _baseUrl = TextEditingController(text: widget.existing?.baseUrl ?? '');
   late final TextEditingController _model = TextEditingController(text: widget.existing?.model ?? '');
   late final TextEditingController _memoryModel = TextEditingController(text: widget.existing?.memoryModel ?? '');
+  late final TextEditingController _contextWindowLimit = TextEditingController(text: widget.existing?.contextWindowLimit?.toString() ?? '');
   late final TextEditingController _apiKey = TextEditingController(text: widget.existingKey ?? '');
   late ProviderType _type = widget.existing?.type == 'anthropic' ? ProviderType.anthropic : ProviderType.openaiCompatible;
   late bool _isDefault = widget.existing?.isDefault ?? false;
@@ -232,6 +237,7 @@ class _ProviderFormDialogState extends State<_ProviderFormDialog> {
     _baseUrl.dispose();
     _model.dispose();
     _memoryModel.dispose();
+    _contextWindowLimit.dispose();
     _apiKey.dispose();
     super.dispose();
   }
@@ -276,6 +282,7 @@ class _ProviderFormDialogState extends State<_ProviderFormDialog> {
       apiKey: _apiKey.text.trim(),
       isDefault: _isDefault,
       memoryModel: _memoryModel.text.trim().isEmpty ? null : _memoryModel.text.trim(),
+      contextWindowLimit: int.tryParse(_contextWindowLimit.text.trim()),
     ));
   }
 
@@ -306,6 +313,15 @@ class _ProviderFormDialogState extends State<_ProviderFormDialog> {
             TextField(
               controller: _memoryModel,
               decoration: const InputDecoration(labelText: '记忆模型（可选，用于状态/摘要抽取）'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _contextWindowLimit,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '上下文窗口（token 数）',
+                helperText: '模型上下文上限，用于实时 token 显示；留空默认 32000',
+              ),
             ),
             const SizedBox(height: 8),
             TextField(

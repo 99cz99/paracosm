@@ -61,8 +61,17 @@ class _ContactListState extends ConsumerState<_ContactList> {
     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '#',
   ];
 
-  final Map<String, GlobalKey> _sectionKeys = {};
+  // Fixed row heights so A-Z jumps can compute an offset without laying out
+  // off-screen rows (lazy list).
+  static const _headerHeight = 40.0;
+  static const _itemHeight = 72.0;
+
+  final _scrollController = ScrollController();
   final GlobalKey _sidebarKey = GlobalKey();
+
+  /// Flattened rows: header (label set) or contact (character set).
+  List<({String? label, Character? character})> _flat = [];
+  final Map<String, int> _headerIndex = {};
 
   List<({String label, List<Character> items})> _group() {
     final pinned = widget.characters
@@ -90,14 +99,36 @@ class _ContactListState extends ConsumerState<_ContactList> {
     return sections;
   }
 
+  void _buildFlat(List<({String label, List<Character> items})> sections) {
+    _flat = [];
+    _headerIndex.clear();
+    for (final section in sections) {
+      _headerIndex[section.label] = _flat.length;
+      _flat.add((label: section.label, character: null));
+      for (final c in section.items) {
+        _flat.add((label: null, character: c));
+      }
+    }
+  }
+
   void _jumpTo(String label) {
-    final ctx = _sectionKeys[label]?.currentContext;
-    if (ctx == null) return;
-    Scrollable.ensureVisible(
-      ctx,
+    final idx = _headerIndex[label];
+    if (idx == null || !_scrollController.hasClients) return;
+    var offset = 0.0;
+    for (var i = 0; i < idx; i++) {
+      offset += _flat[i].character == null ? _headerHeight : _itemHeight;
+    }
+    _scrollController.animateTo(
+      offset.clamp(0.0, _scrollController.position.maxScrollExtent),
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _onSidebarDrag(DragUpdateDetails details) {
@@ -162,33 +193,39 @@ class _ContactListState extends ConsumerState<_ContactList> {
   @override
   Widget build(BuildContext context) {
     final sections = _group();
+    _buildFlat(sections);
     final scheme = Theme.of(context).colorScheme;
 
     return Stack(
       children: [
-        SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final section in sections) ...[
-                _header(section.label, section.label),
-                for (final c in section.items)
-                  ListTile(
-                    leading: CharacterAvatar(
-                      name: c.name,
-                      avatarPath: c.avatarPath,
-                    ),
-                    title: Text(c.name),
-                    subtitle: Text(_tags(c)),
-                    trailing: c.pinnedAt != null
-                        ? Icon(Icons.push_pin, size: 18, color: scheme.primary)
-                        : null,
-                    onTap: () => context.push('/contacts/${c.id}'),
-                    onLongPress: () => _showMenu(c),
-                  ),
-              ],
-            ],
-          ),
+        ListView.builder(
+          controller: _scrollController,
+          itemCount: _flat.length,
+          itemBuilder: (context, index) {
+            final row = _flat[index];
+            if (row.character == null) return _header(row.label!);
+            final c = row.character!;
+            return SizedBox(
+              height: _itemHeight,
+              child: ListTile(
+                leading: CharacterAvatar(
+                  name: c.name,
+                  avatarPath: c.avatarPath,
+                ),
+                title: Text(c.name),
+                subtitle: Text(
+                  _tags(c),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: c.pinnedAt != null
+                    ? Icon(Icons.push_pin, size: 18, color: scheme.primary)
+                    : null,
+                onTap: () => context.push('/contacts/${c.id}'),
+                onLongPress: () => _showMenu(c),
+              ),
+            );
+          },
         ),
         Positioned(
           right: 2,
@@ -228,19 +265,20 @@ class _ContactListState extends ConsumerState<_ContactList> {
     );
   }
 
-  Widget _header(String label, String keyLabel) {
-    // Ensure the key exists even if the label is duplicated (置顶 vs letters).
-    _sectionKeys.putIfAbsent(keyLabel, () => GlobalKey());
-    return Container(
-      key: _sectionKeys[keyLabel],
-      width: double.infinity,
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+  Widget _header(String label) {
+    return SizedBox(
+      height: _headerHeight,
+      child: Container(
+        width: double.infinity,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+        ),
       ),
     );
   }

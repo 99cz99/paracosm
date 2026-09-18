@@ -100,6 +100,9 @@ class Sessions extends Table {
   RealColumn get presencePenalty => real().nullable()();
   RealColumn get frequencyPenalty => real().nullable()();
 
+  /// 会话级世界书选择（JSON 数组）；null = 用角色绑定默认。
+  TextColumn get worldbookIdsJson => text().nullable()();
+
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   IntColumn get lastMessageAt => integer()();
@@ -199,6 +202,9 @@ class ProviderConfigs extends Table {
 
   /// 记忆抽取/摘要用的模型名（可选，留空则用 [model]；用于「便宜模型」）。
   TextColumn get memoryModel => text().nullable()();
+
+  /// 模型上下文窗口上限（token 数），用于实时 token 显示；null = 用默认 32000。
+  IntColumn get contextWindowLimit => integer().nullable()();
   BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();

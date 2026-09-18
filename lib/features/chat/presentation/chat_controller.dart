@@ -11,11 +11,36 @@ import '../../../core/commands/slash_commands.dart';
 import '../../../core/db/database.dart';
 import '../../../core/network/llm/llm_provider.dart';
 import '../../../core/network/llm/provider_factory.dart';
+import '../../../core/network/llm/token_estimator.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/app_exception.dart';
 import '../../../core/world/world_context.dart';
 import '../data/memory_service.dart';
+
+/// A built system-prompt section; [text] already includes its `【label】` header.
+typedef PromptSection = ({String label, String text});
+
+/// Estimated token usage for one would-be request (approximation).
+class TokenUsage {
+  const TokenUsage({
+    required this.sections,
+    required this.historyTokens,
+    required this.contextLimit,
+    required this.outputReserve,
+  });
+
+  final List<({String label, int tokens})> sections;
+  final int historyTokens;
+  final int contextLimit;
+  final int outputReserve;
+
+  int get baseTokens =>
+      sections.fold(0, (sum, e) => sum + e.tokens) + historyTokens;
+  int get available =>
+      contextLimit - outputReserve < 0 ? 0 : contextLimit - outputReserve;
+  int totalWith(int userInputTokens) => baseTokens + userInputTokens;
+}
 
 class ChatUiState {
   const ChatUiState({
@@ -243,6 +268,25 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
   }
 
   Future<ChatRequest> _buildRequest(AppDatabase db, Session session) async {
+    final built = await _buildSections(db, session);
+    return ChatRequest(
+      messages: built.history
+          .map((m) => ChatMessage(role: m.role, content: m.content))
+          .toList(),
+      systemPrompt: _joinSections(built.sections),
+      temperature: session.temperature ?? 1.2,
+      topP: session.topP ?? 1.0,
+      maxTokens: session.maxTokens ?? 4096,
+      presencePenalty: session.presencePenalty,
+      frequencyPenalty: session.frequencyPenalty,
+    );
+  }
+
+  /// Reads the session's data and builds the prompt sections + filtered history.
+  Future<({List<PromptSection> sections, List<Message> history})> _buildSections(
+    AppDatabase db,
+    Session session,
+  ) async {
     final character = await db.getCharacter(session.characterId);
     final worldId = session.worldId ?? '';
     final adaptation = await db.getAdaptation(session.characterId, worldId);
@@ -267,67 +311,106 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
         ? null
         : await _loadAffinity(db, character, worldId);
 
-    var systemPrompt = character == null
-        ? null
-        : _buildSystemPrompt(character, adaptation, affinity);
-    systemPrompt = _injectMemory(
-      systemPrompt,
-      memory,
-      relation,
-      skipRelation: character != null && MemoryService.hasSkillGrowth(character),
-    );
-    systemPrompt =
-        await _injectWorldContext(db, systemPrompt, session, character, history);
+    final sections = <PromptSection>[
+      if (character != null)
+        ..._systemPromptSections(character, adaptation, affinity),
+      ..._memorySections(
+        memory,
+        relation,
+        skipRelation:
+            character != null && MemoryService.hasSkillGrowth(character),
+      ),
+      ...await _worldSections(db, session, character, history),
+    ];
 
-    return ChatRequest(
-      messages: history
-          .map((m) => ChatMessage(role: m.role, content: m.content))
-          .toList(),
-      systemPrompt: systemPrompt,
-      temperature: session.temperature ?? 1.2,
-      topP: session.topP ?? 1.0,
-      maxTokens: session.maxTokens ?? 4096,
-      presencePenalty: session.presencePenalty,
-      frequencyPenalty: session.frequencyPenalty,
+    return (sections: sections, history: history);
+  }
+
+  String? _joinSections(List<PromptSection> sections) {
+    if (sections.isEmpty) return null;
+    return sections.map((s) => s.text).join('\n\n');
+  }
+
+  /// Estimates the token usage of the next would-be request (approximation).
+  Future<TokenUsage> estimateTokenUsage(
+    AppDatabase db,
+    Session session,
+    String userInput,
+  ) async {
+    final built = await _buildSections(db, session);
+    final sections = <({String label, int tokens})>[
+      for (final s in built.sections)
+        (label: s.label, tokens: estimateTokens(s.text)),
+    ];
+    final historyTokens =
+        built.history.fold(0, (sum, m) => sum + estimateTokens(m.content));
+    return TokenUsage(
+      sections: sections,
+      historyTokens: historyTokens,
+      contextLimit: await _resolveContextLimit(db, session),
+      outputReserve: session.maxTokens ?? 4096,
     );
   }
 
-  String? _injectMemory(
-    String? base,
+  Future<int> _resolveContextLimit(AppDatabase db, Session session) async {
+    ProviderConfig? row;
+    if (session.providerId != null && session.providerId!.isNotEmpty) {
+      row = await db.getProviderConfig(session.providerId!);
+    }
+    row ??= await db.getDefaultProviderConfig();
+    return row?.contextWindowLimit ?? 32000;
+  }
+
+  Set<String> _parseWorldbookIds(String raw) {
+    if (raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty)
+            .toSet();
+      }
+    } catch (_) {}
+    return const {};
+  }
+
+  List<PromptSection> _memorySections(
     CharacterMemory? memory,
     CharacterRelation? relation, {
     bool skipRelation = false,
   }) {
-    final parts = <String>[];
+    final sections = <PromptSection>[];
     if (memory != null && memory.summaryText.isNotEmpty) {
-      parts.add('【历史摘要】\n${memory.summaryText}');
+      sections.add((label: '历史摘要', text: '【历史摘要】\n${memory.summaryText}'));
     }
     if (memory != null && memory.stateJson.isNotEmpty && memory.stateJson != '{}') {
-      parts.add('【当前状态】\n${memory.stateJson}');
+      sections.add((label: '当前状态', text: '【当前状态】\n${memory.stateJson}'));
     }
     if (!skipRelation &&
         relation != null &&
         relation.relationJson.isNotEmpty &&
         relation.relationJson != '{}') {
-      parts.add('【你与用户的关系】\n${relation.relationJson}');
+      sections.add(
+          (label: '你与用户的关系', text: '【你与用户的关系】\n${relation.relationJson}'));
     }
-    if (parts.isEmpty) return base;
-    final section = parts.join('\n\n');
-    return base == null || base.isEmpty ? section : '$base\n\n$section';
+    return sections;
   }
 
-  Future<String?> _injectWorldContext(
+  Future<List<PromptSection>> _worldSections(
     AppDatabase db,
-    String? base,
     Session session,
     Character? character,
     List<Message> history,
   ) async {
+    final worldbookIds = session.worldbookIdsJson != null
+        ? _parseWorldbookIds(session.worldbookIdsJson!)
+        : character == null
+            ? const <String>{}
+            : (await db.getCharacterWorldbookIds(character.id)).toSet();
     final worldCtx = await WorldContextBuilder(db).build(
       worldIds: [session.worldId ?? ''],
-      worldbookIds: character == null
-          ? const {}
-          : (await db.getCharacterWorldbookIds(character.id)).toSet(),
+      worldbookIds: worldbookIds,
     );
     final recent = history.length <= MemoryService.worldbookScanMessages
         ? history
@@ -343,13 +426,12 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     final worldbookSection =
         entries.isEmpty ? '' : '【世界书】\n${entries.join('\n\n')}';
 
-    final parts = <String>[
-      if (worldSection.isNotEmpty) worldSection,
-      if (worldbookSection.isNotEmpty) worldbookSection,
-    ];
-    if (parts.isEmpty) return base;
-    final section = parts.join('\n\n');
-    return base == null || base.isEmpty ? section : '$base\n\n$section';
+    final sections = <PromptSection>[];
+    if (worldSection.isNotEmpty) sections.add((label: '世界', text: worldSection));
+    if (worldbookSection.isNotEmpty) {
+      sections.add((label: '世界书', text: worldbookSection));
+    }
+    return sections;
   }
 
   Future<void> _runMemoryUpdate(AppDatabase db, String sessionId) async {
@@ -365,7 +447,7 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     }
   }
 
-  String? _buildSystemPrompt(
+  List<PromptSection> _systemPromptSections(
     Character character,
     CharacterAdaptation? adaptation,
     Map<String, dynamic>? affinity,
@@ -377,28 +459,42 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       core = const {};
     }
 
-    final parts = <String>[];
+    final sections = <PromptSection>[];
     final description = core['description']?.toString() ?? '';
     final personality = core['personality']?.toString() ?? '';
     final scenario = core['scenario']?.toString() ?? '';
     final systemPrompt = core['system_prompt']?.toString() ?? '';
     final firstMes = core['first_mes']?.toString() ?? '';
 
-    if (description.isNotEmpty) parts.add('【角色设定】\n$description');
-    if (personality.isNotEmpty) parts.add('【性格】\n$personality');
-    if (scenario.isNotEmpty) parts.add('【场景】\n$scenario');
-    if (systemPrompt.isNotEmpty) parts.add(systemPrompt);
-    if (affinity != null && affinity.isNotEmpty) {
-      parts.add('【好感度状态】\n${jsonEncode(affinity)}');
+    if (description.isNotEmpty) {
+      sections.add((label: '角色设定', text: '【角色设定】\n$description'));
     }
-    if (firstMes.isNotEmpty) parts.add('【开场白示例】\n$firstMes');
+    if (personality.isNotEmpty) {
+      sections.add((label: '性格', text: '【性格】\n$personality'));
+    }
+    if (scenario.isNotEmpty) {
+      sections.add((label: '场景', text: '【场景】\n$scenario'));
+    }
+    // Raw skill/system prompt — added without a 【】 header.
+    if (systemPrompt.isNotEmpty) {
+      sections.add((label: '系统提示', text: systemPrompt));
+    }
+    if (affinity != null && affinity.isNotEmpty) {
+      sections.add(
+          (label: '好感度状态', text: '【好感度状态】\n${jsonEncode(affinity)}'));
+    }
+    if (firstMes.isNotEmpty) {
+      sections.add((label: '开场白示例', text: '【开场白示例】\n$firstMes'));
+    }
 
     // World-bound adaptation persona (world rules/state are injected via
-    // [_injectWorldContext] so chat/group/story share one path).
+    // [_worldSections] so chat/group/story share one path).
     final persona = _adaptationPersona(adaptation);
-    if (persona.isNotEmpty) parts.add('【世界适配】\n$persona');
+    if (persona.isNotEmpty) {
+      sections.add((label: '世界适配', text: '【世界适配】\n$persona'));
+    }
 
-    return parts.isEmpty ? null : parts.join('\n\n');
+    return sections;
   }
 
   /// Resolves the skill growth state for a character in a world: the per-world

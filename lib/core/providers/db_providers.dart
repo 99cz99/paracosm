@@ -11,3 +11,9 @@ final dbProvider = Provider<AppDatabase>((ref) {
 });
 
 final secureKeyStoreProvider = Provider<SecureKeyStore>((ref) => SecureKeyStore());
+
+/// Whether the realtime token display is enabled (stored in Settings).
+final tokenDisplayEnabledProvider = StreamProvider<bool>((ref) {
+  final db = ref.watch(dbProvider);
+  return db.watchSetting('token_display_enabled').map((v) => v == 'true');
+});

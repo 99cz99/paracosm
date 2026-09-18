@@ -88,7 +88,7 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
     );
     if (cropped == null || cropped.isEmpty) return;
     final path = await CharacterRepository(ref.read(dbProvider))
-        .saveAvatar(cropped, 'png');
+        .saveAvatar(cropped, oldPath: _avatarPath);
     if (!mounted) return;
     setState(() => _avatarPath = path);
   }

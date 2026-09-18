@@ -361,7 +361,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     );
     if (cropped == null || cropped.isEmpty) return;
     final repo = GroupRepository(ref.read(dbProvider));
-    final path = await repo.saveGroupAvatar(cropped, 'png');
+    final path = await repo.saveGroupAvatar(cropped, oldPath: group.avatarPath);
     await repo.setGroupAvatar(widget.groupId, path);
     ref.invalidate(groupProvider(widget.groupId));
   }

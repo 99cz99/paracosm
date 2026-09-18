@@ -138,6 +138,14 @@ class CharacterDetailScreen extends ConsumerWidget {
             label: const Text('翻译开场白为中文'),
           ),
         ],
+        if (_hasEnglishWorldbookKeys(c)) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => _translateWorldbookKeys(context, ref, c),
+            icon: const Icon(Icons.translate),
+            label: const Text('翻译世界书关键词为中文'),
+          ),
+        ],
         const SizedBox(height: 20),
         Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -532,6 +540,23 @@ class CharacterDetailScreen extends ConsumerWidget {
 
     final db = ref.read(dbProvider);
     final character = await db.getCharacter(characterId);
+
+    // Session-level worldbook selection (overrides character binding).
+    List<String>? selectedWorldbookIds;
+    final allBooks = await db.watchWorldbooks().first;
+    if (allBooks.isNotEmpty && context.mounted) {
+      final charBound = (await db.watchWorldbooksForCharacter(characterId).first)
+          .map((b) => b.id)
+          .toSet();
+      if (!context.mounted) return;
+      selectedWorldbookIds = await showMultiSelectSheet(
+        context,
+        title: '选择世界书（本次会话）',
+        options: [for (final b in allBooks) MultiSelectOption(b.id, b.name)],
+        initial: charBound,
+      );
+    }
+
     final worldKey = selectedWorldId ?? '';
     final hasMemory = await db.hasCharacterMemory(characterId, worldKey);
 
@@ -555,10 +580,11 @@ class CharacterDetailScreen extends ConsumerWidget {
       final existing =
           await db.getSessionForCharacter(characterId, selectedWorldId);
       if (existing != null) await db.deleteSession(existing.id);
-      sessionId =
-          await repo.createSession(characterId, worldId: selectedWorldId);
+      sessionId = await repo.createSession(characterId,
+          worldId: selectedWorldId, worldbookIds: selectedWorldbookIds);
     } else {
-      sessionId = await repo.getOrCreateSession(characterId, worldId: selectedWorldId);
+      sessionId = await repo.getOrCreateSession(characterId,
+          worldId: selectedWorldId, worldbookIds: selectedWorldbookIds);
     }
     if (context.mounted) {
       // Pop this detail page so the contacts branch returns to the list;
@@ -574,6 +600,21 @@ class CharacterDetailScreen extends ConsumerWidget {
     final alts = core['alternate_greetings'];
     if (alts is List) {
       return alts.any((a) => needsTranslation(a.toString()));
+    }
+    return false;
+  }
+
+  bool _hasEnglishWorldbookKeys(Character c) {
+    final worldbook = c.worldbookJson == null ? null : _decode(c.worldbookJson!);
+    if (worldbook == null) return false;
+    final entries = worldbook['entries'];
+    if (entries is! List) return false;
+    for (final e in entries) {
+      if (e is! Map) continue;
+      final keys = e['keys'] is List
+          ? (e['keys'] as List).map((k) => k.toString())
+          : const <String>[];
+      if (keys.any(needsTranslation)) return true;
     }
     return false;
   }
@@ -764,7 +805,7 @@ class CharacterDetailScreen extends ConsumerWidget {
     if (cropped == null || cropped.isEmpty) return;
 
     final path = await CharacterRepository(ref.read(dbProvider))
-        .saveAvatar(cropped, 'png');
+        .saveAvatar(cropped, oldPath: c.avatarPath);
     await ref.read(dbProvider).updateCharacter(
           c.id,
           CharactersCompanion(
@@ -802,6 +843,88 @@ class CharacterDetailScreen extends ConsumerWidget {
     } catch (_) {
       return <String, dynamic>{};
     }
+  }
+
+  /// Translates the built-in worldbook's English keys to Chinese and appends
+  /// them, so it triggers on Chinese messages too.
+  Future<void> _translateWorldbookKeys(
+    BuildContext context,
+    WidgetRef ref,
+    Character c,
+  ) async {
+    final worldbook = c.worldbookJson == null ? null : _decode(c.worldbookJson!);
+    if (worldbook == null) return;
+    final entries = worldbook['entries'];
+    if (entries is! List || entries.isEmpty) return;
+
+    final allKeys = <String>[];
+    for (final e in entries) {
+      if (e is! Map) continue;
+      final keys = e['keys'] is List
+          ? (e['keys'] as List).map((k) => k.toString())
+          : const <String>[];
+      allKeys.addAll(keys.where(needsTranslation));
+    }
+    if (allKeys.isEmpty) {
+      if (context.mounted) await showSuccessDialog(context, '没有需要翻译的英文关键词');
+      return;
+    }
+
+    final config = await resolveActiveProvider(
+      ref.read(dbProvider),
+      ref.read(secureKeyStoreProvider),
+    );
+    if (config == null) {
+      if (context.mounted) {
+        await showErrorDialog(context, '请先在「我」中配置 API Provider');
+      }
+      return;
+    }
+
+    if (context.mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        useRootNavigator: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final Map<String, String> translated;
+    try {
+      translated = await translateKeys(buildLlmProvider(config), allKeys);
+    } catch (e) {
+      if (context.mounted) Navigator.of(context).pop();
+      if (context.mounted) await showErrorDialog(context, '翻译失败：$e');
+      return;
+    }
+    if (context.mounted) Navigator.of(context).pop();
+    if (translated.isEmpty) {
+      if (context.mounted) {
+        await showErrorDialog(context, '翻译失败，请检查 API Provider 或重试');
+      }
+      return;
+    }
+
+    for (final e in entries) {
+      if (e is! Map) continue;
+      final keys = e['keys'] is List
+          ? (e['keys'] as List).map((k) => k.toString()).toList()
+          : <String>[];
+      final newKeys = <String>[];
+      for (final k in keys) {
+        newKeys.add(k);
+        final zh = translated[k];
+        if (zh != null && zh.isNotEmpty && zh != k) newKeys.add(zh);
+      }
+      e['keys'] = newKeys;
+    }
+
+    await ref.read(dbProvider).updateCharacter(
+          c.id,
+          CharactersCompanion(worldbookJson: Value(jsonEncode(worldbook))),
+        );
+    if (context.mounted) await showSuccessDialog(context, '已翻译世界书关键词');
   }
 
   Future<void> _export(BuildContext context, WidgetRef ref) async {

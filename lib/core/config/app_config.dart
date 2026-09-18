@@ -4,6 +4,9 @@ class AppConfig {
 
   static const String appName = 'Paracosm';
 
+  /// GitHub repo hosting release APKs, used by the in-app update checker.
+  static const String githubRepo = '99cz99/paracosm';
+
   /// Drift schema version. Bump on every structural migration.
-  static const int schemaVersion = 12;
+  static const int schemaVersion = 14;
 }

@@ -7,7 +7,10 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
+import '../../../core/network/llm/provider_factory.dart';
+import '../../../core/network/llm/translator.dart';
 import '../../../core/providers/db_providers.dart';
+import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/dialogs.dart';
 
 /// Manual worldbook editor: name/description + a list of keyword-triggered
@@ -28,6 +31,7 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
   final List<_EntryController> _entries = [];
   List<dynamic> _sources = const [];
   bool _loading = false;
+  bool _translating = false;
 
   @override
   void initState() {
@@ -131,6 +135,64 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
 
   void _addEntry() => setState(() => _entries.add(_EntryController()));
 
+  /// Translates all English entry keys to Chinese and appends them, so the
+  /// worldbook triggers on Chinese messages too.
+  Future<void> _translateKeys() async {
+    setState(() => _translating = true);
+    try {
+      final db = ref.read(dbProvider);
+      final store = ref.read(secureKeyStoreProvider);
+      final config = await resolveActiveProvider(db, store);
+      if (config == null) {
+        if (mounted) {
+          await showErrorDialog(context, '请先在「我」中配置 API Provider');
+        }
+        return;
+      }
+
+      final allKeys = <String>[];
+      for (final e in _entries) {
+        final keys = e.keys.text
+            .split(RegExp(r'[,，]'))
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty);
+        allKeys.addAll(keys.where(needsTranslation));
+      }
+      if (allKeys.isEmpty) {
+        if (mounted) await showSuccessDialog(context, '没有需要翻译的英文关键词');
+        return;
+      }
+
+      final translated = await translateKeys(buildLlmProvider(config), allKeys);
+      if (translated.isEmpty) {
+        if (mounted) {
+          await showErrorDialog(context, '翻译失败，请检查 API Provider 或重试');
+        }
+        return;
+      }
+
+      for (final e in _entries) {
+        final keys = e.keys.text
+            .split(RegExp(r'[,，]'))
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        final newKeys = <String>[];
+        for (final k in keys) {
+          newKeys.add(k);
+          final zh = translated[k];
+          if (zh != null && zh.isNotEmpty && zh != k) newKeys.add(zh);
+        }
+        e.keys.text = newKeys.join(', ');
+      }
+      if (mounted) await showSuccessDialog(context, '已翻译关键词，请检查并保存');
+    } catch (e) {
+      if (mounted) await showErrorDialog(context, '翻译失败：$e');
+    } finally {
+      if (mounted) setState(() => _translating = false);
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -164,6 +226,18 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
                   decoration: const InputDecoration(labelText: '描述'),
                 ),
                 const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _translating ? null : _translateKeys,
+                  icon: _translating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.translate),
+                  label: Text(_translating ? '翻译中…' : '翻译关键词（英→中）'),
+                ),
+                const SizedBox(height: 12),
                 Text('条目', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 for (var i = 0; i < _entries.length; i++) _entryCard(i),

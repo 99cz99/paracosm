@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/commands/slash_commands.dart';
 import '../../../core/db/database.dart';
+import '../../../core/network/llm/token_estimator.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/app_exception.dart';
@@ -36,6 +37,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   List<SlashCommand> _slashMatches = const [];
   int _slashIndex = 0;
   bool _suppressSlash = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild on every keystroke so the token chip tracks the input text.
+    _inputController.addListener(_onInputTick);
+  }
+
+  void _onInputTick() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
@@ -241,6 +253,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final characterId = character?.id;
     final title = character?.name ?? '聊天';
     final hasAlternates = _hasAlternates(character);
+    final showToken = ref.watch(tokenDisplayEnabledProvider).value ?? false;
+    final tokenUsage = ref.watch(tokenUsageProvider(widget.sessionId)).value;
+    final userInputTokens = estimateTokens(_inputController.text);
 
     final messages = messagesAsync.value ?? <Message>[];
     final hasUserReply =
@@ -286,6 +301,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               onPressed: () => _switchGreeting(1),
             ),
           ],
+          if (showToken && tokenUsage != null)
+            _tokenChip(context, tokenUsage, userInputTokens),
           PopupMenuButton<String>(
             tooltip: '更多',
             onSelected: (value) {
@@ -432,6 +449,124 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onTap: () => _chooseSlash(i),
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tokenChip(
+    BuildContext context,
+    TokenUsage usage,
+    int userInputTokens,
+  ) {
+    final total = usage.totalWith(userInputTokens);
+    final available = usage.available;
+    final ratio = available <= 0 ? 2.0 : total / available;
+    final Color color;
+    if (ratio < 0.6) {
+      color = Colors.green;
+    } else if (ratio < 0.85) {
+      color = Colors.amber.shade700;
+    } else if (ratio < 1.0) {
+      color = Colors.orange.shade800;
+    } else {
+      color = Colors.red;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Center(
+        child: InkWell(
+          onTap: () => _showTokenDetail(context, usage, userInputTokens),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: color),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${_formatK(total)}/${_formatK(available)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showTokenDetail(
+    BuildContext context,
+    TokenUsage usage,
+    int userInputTokens,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: false,
+      isScrollControlled: true,
+      builder: (_) =>
+          _TokenDetailSheet(usage: usage, userInputTokens: userInputTokens),
+    );
+  }
+}
+
+String _formatK(int tokens) {
+  if (tokens >= 1000) return '${(tokens / 1000).toStringAsFixed(1)}K';
+  return '$tokens';
+}
+
+class _TokenDetailSheet extends StatelessWidget {
+  const _TokenDetailSheet({required this.usage, required this.userInputTokens});
+
+  final TokenUsage usage;
+  final int userInputTokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = usage.totalWith(userInputTokens);
+    final available = usage.available;
+    final remaining = (available - total).clamp(0, 1 << 40);
+    final scheme = Theme.of(context).colorScheme;
+
+    Widget row(String label, int tokens) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label),
+              Text(
+                _formatK(tokens),
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        );
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Token 占用（估算）',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              for (final s in usage.sections) row(s.label, s.tokens),
+              row('最近对话', usage.historyTokens),
+              row('用户输入', userInputTokens),
+              const Divider(height: 20),
+              row('输入总计', total),
+              row('输出预留', usage.outputReserve),
+              row('模型上限', usage.contextLimit),
+              row('剩余', remaining),
+            ],
           ),
         ),
       ),

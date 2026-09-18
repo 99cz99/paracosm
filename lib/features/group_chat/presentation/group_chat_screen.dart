@@ -67,6 +67,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     final reversed = messages.reversed.toList();
     final isStreaming = chatState.isGenerating &&
         chatState.streamingGroupId == widget.groupId;
+    final segments = chatState.streamingSegments;
 
     return Scaffold(
       appBar: AppBar(
@@ -95,20 +96,22 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
               data: (_) => ListView.builder(
                 reverse: true,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                itemCount: reversed.length + (isStreaming ? 1 : 0),
+                itemCount: reversed.length + (isStreaming ? segments.length : 0),
                 itemBuilder: (context, index) {
-                  if (isStreaming && index == 0) {
-                    final speaker = memberById[chatState.streamingSpeakerId];
+                  if (isStreaming && index < segments.length) {
+                    final seg = segments[segments.length - 1 - index];
+                    final member = memberById[seg.speakerId];
                     return _bubble(
                       context,
-                      speaker?.character.name ?? '',
-                      chatState.streamingText ?? '',
+                      member?.character.name ?? '',
+                      seg.content,
                       isUser: false,
-                      avatarName: speaker?.character.name,
-                      avatarPath: speaker?.character.avatarPath,
+                      avatarName: member?.character.name,
+                      avatarPath: member?.character.avatarPath,
                     );
                   }
-                  final msg = reversed[isStreaming ? index - 1 : index];
+                  final msg =
+                      reversed[isStreaming ? index - segments.length : index];
                   if (msg.type == 'command_reply' || msg.role == 'system') {
                     return _systemBubble(context, msg.content);
                   }
