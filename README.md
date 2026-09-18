@@ -17,6 +17,10 @@
 
 - 🎀 **绫地宁宁（Nene）** —— 柚子社《魔女的夜宴》女主角 · 三轴成长 + 世界书 + 5000+ 行游戏原文 · [下载](https://github.com/99cz99/paracosm/releases/tag/nene)
 
+## 资源
+
+- 🔓 **DS 破甲** —— DeepSeek 破甲提示词文档（.docx）· [下载](https://github.com/99cz99/paracosm/blob/main/docs/ds破甲1.docx)
+
 ## 功能特性
 
 - 💬 **单聊流式** —— SSE 流式回复，后台继续生成；开场白自动发出、可切换
