@@ -2,11 +2,13 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
+import '../../../core/import/worldbook_exporter.dart';
 import '../../../core/network/llm/provider_factory.dart';
 import '../../../core/network/llm/translator.dart';
 import '../../../core/providers/db_providers.dart';
@@ -67,6 +69,45 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
     }
     _sources = data['sources'] is List ? data['sources'] as List : const [];
     if (mounted) setState(() {});
+  }
+
+  Future<void> _export() async {
+    final id = widget.worldbookId;
+    if (id == null) return;
+    final book = await ref.read(dbProvider).getWorldbook(id);
+    if (book == null) return;
+    final json = exportWorldbookJson(
+      name: book.name,
+      description: book.description,
+      bookJson: book.bookJson,
+    );
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('导出世界书'),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Text(json, style: const TextStyle(fontSize: 12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: json));
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('复制 JSON'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -210,6 +251,14 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.worldbookId == null ? '新建世界书' : '编辑世界书'),
+        actions: [
+          if (widget.worldbookId != null)
+            IconButton(
+              icon: const Icon(Icons.ios_share),
+              tooltip: '导出世界书',
+              onPressed: _export,
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -278,13 +278,22 @@ class CharacterDetailScreen extends ConsumerWidget {
                   title: Text(a.adaptation.worldId.isEmpty
                       ? '默认适配'
                       : (a.worldName ?? '已删除的世界')),
-                  trailing: a.adaptation.worldId.isEmpty
-                      ? null
-                      : IconButton(
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined),
+                        tooltip: '编辑适配',
+                        onPressed: () => _editAdaptation(context, ref, a),
+                      ),
+                      if (a.adaptation.worldId.isNotEmpty)
+                        IconButton(
                           icon: const Icon(Icons.link_off),
                           tooltip: '解绑世界',
                           onPressed: () => _unbindWorld(context, ref, a),
                         ),
+                    ],
+                  ),
                   onTap: () => _editAdaptation(context, ref, a),
                 ),
                 if (_persona(a.adaptation.adaptationJson).trim().isNotEmpty)
@@ -627,6 +636,15 @@ class CharacterDetailScreen extends ConsumerWidget {
     Character c,
   ) async {
     final core = _decode(c.corePersonaJson);
+
+    // 已翻译过就不再重翻（避免覆盖已有中文缓存、浪费一次 LLM 调用）。
+    final cachedZh = core['greetings_zh'];
+    if (cachedZh is List && cachedZh.isNotEmpty) {
+      if (context.mounted) {
+        await showSuccessDialog(context, '开场白已翻译过，无需重复翻译');
+      }
+      return;
+    }
 
     // 保留原文格式：只 trim + 精确去重，不做空白折叠（否则换行/段落结构会丢）。
     final greetings = <String>[];

@@ -14,6 +14,7 @@ import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/app_exception.dart';
 import '../../../core/utils/dialogs.dart';
+import '../data/session_exporter.dart';
 import '../data/session_repository.dart';
 import 'chat_controller.dart';
 import 'chat_providers.dart';
@@ -204,6 +205,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (mounted) context.pop();
   }
 
+  Future<void> _exportSession() async {
+    final db = ref.read(dbProvider);
+    final session = await db.getSession(widget.sessionId);
+    if (session == null) return;
+    final messages = await db.getMessages(widget.sessionId);
+    final json = exportSessionJson(session, messages);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('导出会话'),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Text(json, style: const TextStyle(fontSize: 12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: json));
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('复制 JSON'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _sessionSettings() async {
     final db = ref.read(dbProvider);
     final session = await db.getSession(widget.sessionId);
@@ -248,7 +284,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final messagesAsync = ref.watch(messagesProvider(widget.sessionId));
-    final chatState = ref.watch(chatControllerProvider);
     final character = ref.watch(chatCharacterProvider(widget.sessionId)).value;
     final characterId = character?.id;
     final title = character?.name ?? '聊天';
@@ -261,15 +296,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final hasUserReply =
         messages.any((m) => m.role == 'user' && m.type != 'command');
     final reversed = messages.reversed.toList();
-    final streamingText = chatState.streamingText ?? '';
     // Only show the streaming bubble for THIS session — a stream running in
-    // another conversation must not leak into this one.
-    final isThisSessionStreaming = chatState.isGenerating &&
-        chatState.streamingSessionId == widget.sessionId;
-    // Hide the streaming bubble once the reply is already persisted (content
-    // matches the last message), so it doesn't double up on the message.
-    final showStreaming = isThisSessionStreaming &&
-        (reversed.isEmpty || reversed.first.content != streamingText);
+    // another conversation must not leak into this one. Intentionally do NOT
+    // select `streamingText` here: it changes every delta and would rebuild
+    // the whole screen. The bubble widget below watches `streamingText` itself.
+    final showStreaming = ref.watch(chatControllerProvider.select(
+        (s) => s.isGenerating && s.streamingSessionId == widget.sessionId));
 
     return Scaffold(
       appBar: AppBar(
@@ -316,6 +348,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 }
               } else if (value == 'settings') {
                 _sessionSettings();
+              } else if (value == 'export') {
+                _exportSession();
               } else if (value == 'delete') {
                 _deleteSession();
               }
@@ -324,6 +358,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               PopupMenuItem(value: 'detail', child: Text('查看角色详情')),
               PopupMenuItem(value: 'edit', child: Text('编辑人设')),
               PopupMenuItem(value: 'settings', child: Text('会话设置')),
+              PopupMenuItem(value: 'export', child: Text('导出会话')),
               PopupMenuItem(value: 'delete', child: Text('删除会话')),
             ],
           ),
@@ -341,10 +376,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 itemCount: reversed.length + (showStreaming ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (showStreaming && index == 0) {
-                    return MessageBubble(
-                      role: 'assistant',
-                      content: streamingText,
-                      isStreaming: true,
+                    return _StreamingBubble(
+                      sessionId: widget.sessionId,
                       avatarName: character?.name,
                       avatarPath: character?.avatarPath,
                       onAvatarTap: characterId == null
@@ -753,6 +786,44 @@ class _SessionSettingsDialogState extends State<_SessionSettingsDialog> {
             onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
         FilledButton(onPressed: _submit, child: const Text('保存')),
       ],
+    );
+  }
+}
+
+/// The in-progress assistant bubble. Watches `streamingText` itself so each
+/// delta only rebuilds this small widget, not the whole chat screen.
+class _StreamingBubble extends ConsumerWidget {
+  const _StreamingBubble({
+    required this.sessionId,
+    this.avatarName,
+    this.avatarPath,
+    this.onAvatarTap,
+  });
+
+  final String sessionId;
+  final String? avatarName;
+  final String? avatarPath;
+  final VoidCallback? onAvatarTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final streamingText =
+        ref.watch(chatControllerProvider.select((s) => s.streamingText)) ?? '';
+    // Hide once the reply has been persisted (streamingText equals the last
+    // message), so it doesn't double up on the persisted message for a frame.
+    final messages =
+        ref.watch(messagesProvider(sessionId)).value ?? const <Message>[];
+    final lastContent = messages.isEmpty ? null : messages.last.content;
+    if (streamingText.isNotEmpty && streamingText == lastContent) {
+      return const SizedBox.shrink();
+    }
+    return MessageBubble(
+      role: 'assistant',
+      content: streamingText,
+      isStreaming: true,
+      avatarName: avatarName,
+      avatarPath: avatarPath,
+      onAvatarTap: onAvatarTap,
     );
   }
 }

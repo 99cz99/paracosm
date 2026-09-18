@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/db/database.dart';
 import '../../../core/network/llm/llm_provider.dart';
 import '../../../core/utils/app_exception.dart';
+import '../../../core/utils/prompt_template.dart';
 import '../../../core/world/world_context.dart';
 import '../../chat/data/memory_service.dart';
 
@@ -55,6 +56,7 @@ class GroupService {
     final forcedName = forcedSpeakerId == null
         ? null
         : _nameOf(members, forcedSpeakerId);
+    final userName = await _db.getSetting('user_name') ?? '我';
 
     final systemPrompt = _buildSystemPrompt(
       group,
@@ -64,6 +66,7 @@ class GroupService {
       pairs,
       forcedName,
       groupMemory,
+      userName,
     );
 
     final messages = history.map((m) {
@@ -135,11 +138,12 @@ class GroupService {
     List<PairRelation> pairs,
     String? forcedName,
     String? groupMemory,
+    String userName,
   ) {
     final parts = <String>[];
     if (worldSection.isNotEmpty) parts.add(worldSection);
     for (final m in members) {
-      parts.add('【${m.character.name}】\n${_persona(m.character)}');
+      parts.add('【${m.character.name}】\n${_persona(m.character, userName)}');
     }
     if (worldbookSection.isNotEmpty) parts.add(worldbookSection);
     if (groupMemory != null && groupMemory.isNotEmpty) {
@@ -180,14 +184,14 @@ class GroupService {
 
   // --- helpers -----------------------------------------------------------
 
-  String _persona(Character c) {
+  String _persona(Character c, String userName) {
     try {
       final core = jsonDecode(c.corePersonaJson) as Map<String, dynamic>;
       final parts = <String>[
         (core['description'] ?? '').toString(),
         (core['personality'] ?? '').toString(),
       ].where((s) => s.isNotEmpty).toList();
-      return parts.join('\n');
+      return applyPlaceholders(parts.join('\n'), c.name, userName);
     } catch (_) {
       return '';
     }

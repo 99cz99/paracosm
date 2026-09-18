@@ -76,6 +76,13 @@ class ProfileScreen extends ConsumerWidget {
           ),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: const Text('我的名字'),
+            subtitle: const Text('角色卡里 {{user}} 会替换成这个名字'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _editUserName(context, ref),
+          ),
+          ListTile(
             leading: const Icon(Icons.system_update),
             title: const Text('检查更新'),
             subtitle: const Text('检查 GitHub Releases 是否有新版本'),
@@ -139,6 +146,43 @@ class ProfileScreen extends ConsumerWidget {
       if (context.mounted) {
         await showErrorDialog(context, e is AppException ? e.message : '恢复失败：$e');
       }
+    }
+  }
+
+  Future<void> _editUserName(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(dbProvider);
+    final current = await db.getSetting('user_name') ?? '我';
+    final controller = TextEditingController(text: current);
+    if (!context.mounted) return;
+    final result = await showDialog<String>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('我的名字'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '在剧情里的名字'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    // Don't dispose the controller here: the dialog is still playing its exit
+    // animation when showDialog's future resolves, and disposing it now makes
+    // the still-mounted TextField hit `_dependents.isEmpty` on the next frame.
+    if (result != null && result.isNotEmpty) {
+      await db.setSetting('user_name', result);
+      if (context.mounted) await showSuccessDialog(context, '已保存');
     }
   }
 

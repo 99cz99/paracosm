@@ -561,23 +561,22 @@ String _formatAffinity(String? affinityStr) {
 /// Renders one labelled value as a single human-readable line: scalars inline,
 /// lists joined by `、`, maps as `key：value` pairs joined by `、`.
 String _formatValue(String label, dynamic value) {
-  final String text;
-  if (value is List) {
-    text = value.map(_scalar).where((s) => s.isNotEmpty).join('、');
-  } else if (value is Map) {
-    text = value.entries
-        .map((e) => '${e.key}：${_scalar(e.value)}')
-        .join('、');
-  } else {
-    text = value.toString();
-  }
-  return '$label：$text';
+  return '$label：${_formatInline(value)}';
 }
 
-/// Compact string for a list/map item; nested structures fall back to JSON.
-String _scalar(dynamic value) {
-  if (value is String || value is num || value is bool) return value.toString();
-  return const JsonEncoder().convert(value);
+/// Recursively renders a value as human-readable text: scalars inline, lists
+/// joined by `、`, maps as `key：value` pairs — never raw JSON.
+String _formatInline(dynamic value) {
+  if (value is List) {
+    return value.map(_formatInline).where((s) => s.isNotEmpty).join('、');
+  }
+  if (value is Map) {
+    return value.entries
+        .map((e) => '${e.key}：${_formatInline(e.value)}')
+        .join('、');
+  }
+  if (value == null) return '';
+  return value.toString();
 }
 
 Map<String, dynamic>? _tryJsonMap(String raw) {

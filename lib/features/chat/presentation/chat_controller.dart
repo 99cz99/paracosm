@@ -15,6 +15,7 @@ import '../../../core/network/llm/token_estimator.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/app_exception.dart';
+import '../../../core/utils/prompt_template.dart';
 import '../../../core/world/world_context.dart';
 import '../data/memory_service.dart';
 
@@ -323,7 +324,15 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       ...await _worldSections(db, session, character, history),
     ];
 
-    return (sections: sections, history: history);
+    // Replace {{char}}/{{user}} placeholders across all injected text.
+    final userName = await db.getSetting('user_name') ?? '我';
+    final charName = character?.name ?? '';
+    final templated = <PromptSection>[
+      for (final s in sections)
+        (label: s.label, text: applyPlaceholders(s.text, charName, userName)),
+    ];
+
+    return (sections: templated, history: history);
   }
 
   String? _joinSections(List<PromptSection> sections) {

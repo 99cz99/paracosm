@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
+import '../../../core/utils/prompt_template.dart';
 
 class SessionRepository {
   SessionRepository(this._db);
@@ -67,26 +68,32 @@ class SessionRepository {
   Future<List<String>> getGreetings(String characterId) async {
     final character = await _db.getCharacter(characterId);
     if (character == null) return const [];
+    final userName = await _db.getSetting('user_name') ?? '我';
     try {
       final core = jsonDecode(character.corePersonaJson) as Map<String, dynamic>;
+      final List<String> greetings;
       // Prefer the cached Chinese translations when they exist.
       final zh = core['greetings_zh'];
       if (zh is List && zh.isNotEmpty) {
-        return List<String>.from(zh.map((e) => e.toString().trim()))
+        greetings = List<String>.from(zh.map((e) => e.toString().trim()))
             .where((s) => s.isNotEmpty)
             .toList();
-      }
-      final greetings = <String>[];
-      final first = (core['first_mes'] ?? '').toString().trim();
-      if (first.isNotEmpty) greetings.add(first);
-      final alts = core['alternate_greetings'];
-      if (alts is List) {
-        for (final a in alts) {
-          final s = a.toString().trim();
-          if (s.isNotEmpty && !greetings.contains(s)) greetings.add(s);
+      } else {
+        greetings = [];
+        final first = (core['first_mes'] ?? '').toString().trim();
+        if (first.isNotEmpty) greetings.add(first);
+        final alts = core['alternate_greetings'];
+        if (alts is List) {
+          for (final a in alts) {
+            final s = a.toString().trim();
+            if (s.isNotEmpty && !greetings.contains(s)) greetings.add(s);
+          }
         }
       }
-      return greetings;
+      return [
+        for (final g in greetings)
+          applyPlaceholders(g, character.name, userName),
+      ];
     } catch (_) {
       return const [];
     }
@@ -121,11 +128,14 @@ class SessionRepository {
   Future<String> _firstMessage(String characterId) async {
     final character = await _db.getCharacter(characterId);
     if (character == null) return '';
+    final userName = await _db.getSetting('user_name') ?? '我';
     try {
       final core = jsonDecode(character.corePersonaJson) as Map<String, dynamic>;
       final zh = core['greetings_zh'];
-      if (zh is List && zh.isNotEmpty) return zh.first.toString().trim();
-      return (core['first_mes'] ?? '').toString().trim();
+      final text = (zh is List && zh.isNotEmpty)
+          ? zh.first.toString().trim()
+          : (core['first_mes'] ?? '').toString().trim();
+      return applyPlaceholders(text, character.name, userName);
     } catch (_) {
       return '';
     }

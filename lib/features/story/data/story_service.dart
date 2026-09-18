@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../../core/db/database.dart';
 import '../../../core/network/llm/llm_provider.dart';
 import '../../../core/utils/app_exception.dart';
+import '../../../core/utils/prompt_template.dart';
 import '../../../core/world/world_context.dart';
 
 /// A generated story beat: narrative text + the choices offered to the user.
@@ -42,7 +43,9 @@ class StoryService {
       worldbookIds: (await _db.getStoryWorldbookIds(storyId)).toSet(),
     );
 
-    final text = await _complete(provider, _prompt(story, character, worldCtx, path));
+    final userName = await _db.getSetting('user_name') ?? '我';
+    final text =
+        await _complete(provider, _prompt(story, character, worldCtx, path, userName));
     final node = _parseNode(text);
     if (node == null) {
       throw AppException('剧情生成失败，请重试');
@@ -55,11 +58,14 @@ class StoryService {
     Character? character,
     WorldContext worldCtx,
     List<StoryNode> path,
+    String userName,
   ) {
     final parts = <String>['你是视觉小说引擎，生成下一段剧情。'];
     parts.add('剧本名称：${story.name}');
     if (story.description.isNotEmpty) parts.add('剧本简介：${story.description}');
-    if (character != null) parts.add('角色：${character.name}\n${_persona(character)}');
+    if (character != null) {
+      parts.add('角色：${character.name}\n${_persona(character, userName)}');
+    }
     final worldSection = worldCtx.buildWorldSection();
     if (worldSection.isNotEmpty) parts.add(worldSection);
     final worldbookContext = <String>[
@@ -87,14 +93,14 @@ class StoryService {
     return parts.join('\n\n');
   }
 
-  String _persona(Character c) {
+  String _persona(Character c, String userName) {
     try {
       final core = jsonDecode(c.corePersonaJson) as Map<String, dynamic>;
       final parts = [
         (core['description'] ?? '').toString(),
         (core['personality'] ?? '').toString(),
       ].where((s) => s.isNotEmpty).toList();
-      return parts.join('\n');
+      return applyPlaceholders(parts.join('\n'), c.name, userName);
     } catch (_) {
       return '';
     }

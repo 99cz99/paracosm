@@ -6,6 +6,7 @@ import '../../../core/db/database.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/utils/dialogs.dart';
 import '../../../core/utils/multi_select_sheet.dart';
+import '../../../core/utils/pinyin.dart';
 import '../../contacts/presentation/contacts_providers.dart';
 import '../../contacts/presentation/widgets/character_avatar.dart';
 import '../../worlds/presentation/worlds_providers.dart';
@@ -119,6 +120,13 @@ class _GroupCreateScreenState extends ConsumerState<GroupCreateScreen> {
   @override
   Widget build(BuildContext context) {
     final characters = ref.watch(charactersProvider).value ?? [];
+    final sortedCharacters = [...characters]..sort((a, b) {
+        final ia = pinyinInitial(a.name);
+        final ib = pinyinInitial(b.name);
+        final c = ia.compareTo(ib);
+        if (c != 0) return c;
+        return a.name.compareTo(b.name);
+      });
     final worlds = ref.watch(worldsProvider).value ?? [];
     final worldbooks = ref.watch(worldbooksProvider).value ?? [];
     final worldNames = [for (final w in worlds) if (_worldIds.contains(w.id)) w.name];
@@ -167,7 +175,7 @@ class _GroupCreateScreenState extends ConsumerState<GroupCreateScreen> {
                 Text('选择角色（至少 2 个）',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
-                for (final c in characters)
+                for (final c in sortedCharacters)
                   CheckboxListTile(
                     value: _selected.contains(c.id),
                     onChanged: (v) => setState(() {
