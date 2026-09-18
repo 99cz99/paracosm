@@ -11,8 +11,6 @@
 
 > 📦 最新 APK 见 [Releases](https://github.com/99cz99/paracosm/releases)（Android 安装需允许「安装未知来源应用」）
 
-完整介绍、使用说明与 FAQ 见发布页 → **[99cz99.github.io/paracosm](https://99cz99.github.io/paracosm/)**
-
 ## 功能特性
 
 - 💬 **单聊流式** —— SSE 流式回复，后台继续生成；开场白自动发出、可切换
