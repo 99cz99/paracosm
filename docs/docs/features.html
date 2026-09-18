@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>功能特性 — Paracosm</title>
+  <link rel="icon" type="image/png" href="../assets/icon.png" />
+  <link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="../index.html">
+    <img src="../assets/icon.png" alt="Paracosm 图标" />
+    Paracosm
+  </a>
+  <div class="links">
+    <a href="../index.html">首页</a>
+    <a href="index.html" class="active">文档</a>
+    <a href="https://github.com/99cz99/paracosm" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="sidebar">
+    <span class="side-title">文档</span>
+    <a href="index.html">文档首页</a>
+    <a href="getting-started.html">快速开始</a>
+    <a href="features.html" class="active">功能特性</a>
+    <a href="architecture.html">技术架构</a>
+  </aside>
+
+  <article class="doc-content">
+    <h1>功能特性</h1>
+
+    <h2>角色导入与三层解耦</h2>
+    <p>支持酒馆卡（PNG / JSON，V1/V2/V3）与 Skill（ZIP / Markdown）导入，统一为 <code>ImportedCharacter</code>。</p>
+    <ul>
+      <li><strong>角色 core</strong>：<code>Characters.corePersonaJson</code>（SillyTavern persona）</li>
+      <li><strong>世界适配 adaptation</strong>：<code>CharacterAdaptations</code>（默认 <code>worldId=''</code>）</li>
+      <li><strong>世界书</strong>：角色内置世界书（随角色存）+ 共享世界书库（多对多绑定）</li>
+    </ul>
+    <p>同一角色在不同世界各自独立：世界适配、关系、Skill 成长、记忆均按「角色 × 世界」隔离。</p>
+
+    <h2>单聊</h2>
+    <ul>
+      <li>SSE 流式回复，后台继续生成（前台服务保活）；中断时保留部分回复。</li>
+      <li>开场白自动发出，聊天内 ←/🎲/→ 切换（用户回复后隐藏）；英文开场白可逐条翻译缓存。</li>
+      <li>一个「角色 × 世界」一个会话；「全新开始」清空该世界记忆并重建。</li>
+      <li>每会话可指定 API provider 与采样参数（温度 / maxTokens / penalty）+ 采样预设。</li>
+      <li>长按消息撤回、复制。</li>
+    </ul>
+
+    <h2>群聊 · 三模式</h2>
+    <ul>
+      <li>多角色同屏对话，三种模式，角色对关系（<code>CharacterRelations</code>）驱动互动。</li>
+      <li>成员独立记忆可开关（<code>Groups.memoryEnabled</code>），支持多世界绑定。</li>
+    </ul>
+
+    <h2>剧情 · 分支树</h2>
+    <ul>
+      <li>AI 生成剧情节点，选择推进分支；复用已生成分支，未命中才生成。</li>
+      <li>「重来」覆盖当前节点并删子树；分支树可跳转 / 编辑 / 删除。</li>
+      <li>存档与回退；<code>choices</code> 空数组即结局。</li>
+    </ul>
+
+    <h2>记忆系统</h2>
+    <ul>
+      <li>每轮回复后异步抽取「结构化状态 + 滚动摘要」，存 <code>CharacterMemories</code>（按角色 × 世界复合主键）。</li>
+      <li>世界书按关键词注入 system prompt（纯字符串匹配，无 LLM）。</li>
+      <li>关系与 Skill 成长按「角色 × 世界」隔离，删会话即删该角色 × 世界的记忆。</li>
+    </ul>
+
+    <h2>Skill 成长</h2>
+    <p>带 <code>core['affinity']</code> 的角色走 skill 自带三轴数值规则（信任 / 堕落度 / H 场景）。每轮单聊回复后由记忆模型产出更新 JSON，clamp 后写回 <code>CharacterAffinities</code>。</p>
+
+    <h2>其他</h2>
+    <ul>
+      <li><strong>搜索</strong>：角色 / 消息搜索。</li>
+      <li><strong>备份/恢复</strong>：JSON 全量导出导入（含 providerConfigs；API key 不存）。</li>
+      <li><strong>联系人</strong>：首字母拼音排序（lpinyin）+ 置顶 + A-Z 索引条；批量导入；头像裁剪。</li>
+      <li><strong>世界书库</strong>：JSON / Markdown / zip 导入 + 手动编辑，绑定到角色 / 世界 / 群聊 / 剧情。</li>
+      <li><strong>角色编辑</strong>：完整人设（system_prompt / mes_example / 备注 / 昵称 / 后置指令），改完下一条消息即生效。</li>
+    </ul>
+  </article>
+</div>
+
+<footer class="footer">Paracosm · 纯客户端 AI 角色扮演 App</footer>
+
+</body>
+</html>

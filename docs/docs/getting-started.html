@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>快速开始 — Paracosm</title>
+  <link rel="icon" type="image/png" href="../assets/icon.png" />
+  <link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="../index.html">
+    <img src="../assets/icon.png" alt="Paracosm 图标" />
+    Paracosm
+  </a>
+  <div class="links">
+    <a href="../index.html">首页</a>
+    <a href="index.html" class="active">文档</a>
+    <a href="https://github.com/99cz99/paracosm" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="sidebar">
+    <span class="side-title">文档</span>
+    <a href="index.html">文档首页</a>
+    <a href="getting-started.html" class="active">快速开始</a>
+    <a href="features.html">功能特性</a>
+    <a href="architecture.html">技术架构</a>
+  </aside>
+
+  <article class="doc-content">
+    <h1>快速开始</h1>
+    <p>从零构建并跑起 Paracosm（Android 优先，Android-only 工程）。</p>
+
+    <h2>1. 环境要求</h2>
+    <table>
+      <thead><tr><th>组件</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>Flutter SDK</td><td>stable（如 3.47.x，Dart 3.x）</td></tr>
+        <tr><td>Android SDK</td><td>platform 36 / build-tools 36.0.0</td></tr>
+        <tr><td>JDK</td><td>17</td></tr>
+        <tr><td>设备</td><td>实体 Android 手机，或已启用硬件加速的模拟器</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      需要设置环境变量：<code>ANDROID_HOME</code>、<code>JAVA_HOME</code>，并让 <code>flutter</code> 在 PATH 中。
+    </div>
+
+    <h2>2. 拉依赖</h2>
+    <pre><code>flutter pub get</code></pre>
+
+    <h2>3. 静态检查 / 测试</h2>
+    <pre><code>flutter analyze          # 目标 0 issue
+flutter test             # 单元测试（纯 Dart + 内存 DAO）</code></pre>
+
+    <h2>4. 构建 &amp; 部署</h2>
+    <p>推荐分步部署（比 <code>flutter run</code> 更稳）：</p>
+    <pre><code>flutter build apk --debug
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+adb shell am start -n com.paracosm.app/.MainActivity</code></pre>
+    <p>打 release 包：</p>
+    <pre><code>flutter build apk --release        # 通用 APK
+flutter build apk --release --split-per-abi   # 按 ABI 拆分，更小</code></pre>
+
+    <h2>5. 配置 API Provider</h2>
+    <p>打开 App → 「我」→「API Provider」→ 填入你的 API key（支持 OpenAI 兼容接口与 Anthropic）。可用「测试连接」验证，点选切换当前 provider。</p>
+
+    <div class="callout">
+      API key 仅保存在本机（flutter_secure_storage），不会随备份导出、也不会同步到任何服务器。
+    </div>
+  </article>
+</div>
+
+<footer class="footer">Paracosm · 纯客户端 AI 角色扮演 App</footer>
+
+</body>
+</html>
