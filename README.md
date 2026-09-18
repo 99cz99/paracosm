@@ -19,7 +19,7 @@
 
 ## 资源
 
-- 🔓 **DS 破甲** —— DeepSeek 破甲提示词文档（.docx）· [下载](https://github.com/99cz99/paracosm/blob/main/docs/ds破甲1.docx)
+- 🔓 **DS 破甲** —— DeepSeek 破甲提示词文档（.docx，⚠️ 内容可能引起不适）· [下载](https://github.com/99cz99/paracosm/blob/main/docs/ds破甲1.docx)
 
 ## 功能特性
 
