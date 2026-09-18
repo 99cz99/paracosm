@@ -11,6 +11,12 @@
 
 > 📦 最新 APK 见 [Releases](https://github.com/99cz99/paracosm/releases)（Android 安装需允许「安装未知来源应用」）
 
+## 角色包
+
+分享的角色包（Skill 格式）。下载后到 Paracosm「联系人 → 导入」选择 zip 即可导入。
+
+- 🎀 **绫地宁宁（Nene）** —— 柚子社《魔女的夜宴》女主角 · 三轴成长 + 世界书 + 5000+ 行游戏原文 · [下载](https://github.com/99cz99/paracosm/releases/tag/nene)
+
 ## 功能特性
 
 - 💬 **单聊流式** —— SSE 流式回复，后台继续生成；开场白自动发出、可切换
