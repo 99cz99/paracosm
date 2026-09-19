@@ -27,6 +27,15 @@ class Characters extends Table {
   /// 置顶时间戳；null = 未置顶（联系人列表置顶区按此倒序）。
   IntColumn get pinnedAt => integer().nullable()();
 
+  /// 内置助手标识（角色/世界/世界书/使用助手）；null = 普通角色。
+  TextColumn get builtInKey => text().nullable()();
+
+  /// 虚拟年龄（角色设定/外表年龄，自由文本）。
+  TextColumn get virtualAge => text().nullable()();
+
+  /// 真实年龄（设定内实际年龄，自由文本，用于声明成年）。
+  TextColumn get realAge => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -102,6 +111,10 @@ class Sessions extends Table {
 
   /// 会话级世界书选择（JSON 数组）；null = 用角色绑定默认。
   TextColumn get worldbookIdsJson => text().nullable()();
+
+  /// 本会话累计消耗的 token（prompt/completion，逐轮累加）。
+  IntColumn get totalPromptTokens => integer().nullable()();
+  IntColumn get totalCompletionTokens => integer().nullable()();
 
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();

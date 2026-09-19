@@ -38,7 +38,7 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
   Future<void> _init() async {
     await _refresh();
     if (_currentNode == null && _story != null && !_generating) {
-      await _generateRoot();
+      await _ensureRoot();
     }
   }
 
@@ -63,7 +63,20 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
     return config == null ? null : buildLlmProvider(config);
   }
 
-  Future<void> _generateRoot() async {
+  /// Jumps to the existing root node if there is one, otherwise generates a new
+  /// opening node. Prevents creating duplicate roots after the current node is
+  /// deleted.
+  Future<void> _ensureRoot() async {
+    final db = ref.read(dbProvider);
+    final nodes = await db.getStoryNodes(widget.storyId);
+    final roots = nodes.where((n) => n.parentId == null).toList();
+    final root = roots.isEmpty ? null : roots.first;
+    if (root != null) {
+      await StoryRepository(db).setCurrentNode(widget.storyId, root.id);
+      await _refresh();
+      return;
+    }
+
     final provider = await _resolveProvider();
     if (!mounted) return;
     if (provider == null) {
@@ -149,6 +162,18 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
   Future<void> _regenerate() async {
     final current = _currentNode;
     if (_generating || current == null) return;
+    final children =
+        await ref.read(dbProvider).getChildren(widget.storyId, current.id);
+    if (!mounted) return;
+    if (children.isNotEmpty) {
+      final ok = await showConfirmDialog(
+        context,
+        title: '重来',
+        message: '重来会重新生成当前段落，并删除它的 ${children.length} 个后续分支，确定？',
+        confirmLabel: '重来',
+      );
+      if (!ok) return;
+    }
     final provider = await _resolveProvider();
     if (!mounted) return;
     if (provider == null) {
@@ -187,12 +212,16 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
   Future<void> _restart() async {
     final db = ref.read(dbProvider);
     final nodes = await db.getStoryNodes(widget.storyId);
-    final root = nodes.where((n) => n.parentId == null).firstOrNull;
+    final roots = nodes.where((n) => n.parentId == null).toList();
+    final root = roots.isEmpty ? null : roots.first;
     await StoryRepository(db).setCurrentNode(widget.storyId, root?.id);
     await _refresh();
   }
 
   Future<void> _editNode(StoryNode node) async {
+    final children =
+        await ref.read(dbProvider).getChildren(widget.storyId, node.id);
+    if (!mounted) return;
     final narrativeController = TextEditingController(text: node.narrative);
     final choicesController =
         TextEditingController(text: _choices(node).join('\n'));
@@ -205,6 +234,14 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (children.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '此节点已有 ${children.length} 个后续分支，保存后将删除它们。',
+                    style: const TextStyle(color: Colors.orange),
+                  ),
+                ),
               TextField(
                 controller: narrativeController,
                 maxLines: 6,
@@ -239,8 +276,14 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    await StoryRepository(ref.read(dbProvider))
-        .editNode(node.id, narrativeController.text.trim(), choices);
+    // Use regenerateNode so any stale child branches are dropped together with
+    // the edit (keeps chosenIndex consistent).
+    await StoryRepository(ref.read(dbProvider)).regenerateNode(
+      widget.storyId,
+      node.id,
+      narrativeController.text.trim(),
+      choices,
+    );
     await _refresh();
   }
 
@@ -307,7 +350,8 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
       await showErrorDialog(context, '剧情正在生成中，请稍后再读档');
       return;
     }
-    final saves = await ref.read(dbProvider).getStorySaves(widget.storyId);
+    final db = ref.read(dbProvider);
+    final saves = await db.getStorySaves(widget.storyId);
     if (!mounted) return;
     if (saves.isEmpty) {
       await showErrorDialog(context, '还没有存档');
@@ -315,6 +359,7 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
     }
     final save = await showModalBottomSheet<StorySave>(
       context: context,
+      useRootNavigator: false,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -335,6 +380,27 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
                         '${s.isQuick ? '快速存档 · ' : ''}${_formatTime(s.savedAt)}',
                       ),
                       leading: Icon(s.isQuick ? Icons.bolt : Icons.save),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            tooltip: '重命名',
+                            onPressed: () async {
+                              Navigator.of(sheetContext).pop();
+                              await _renameSave(s);
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            tooltip: '删除',
+                            onPressed: () async {
+                              Navigator.of(sheetContext).pop();
+                              await _deleteSave(s);
+                            },
+                          ),
+                        ],
+                      ),
                       onTap: () => Navigator.of(sheetContext).pop(s),
                     ),
                 ],
@@ -350,8 +416,15 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
       await showErrorDialog(context, '该存档没有记录剧情进度');
       return;
     }
+    // Validate the saved node still exists before switching to it.
+    final node = await db.getStoryNode(save.currentNodeId!);
+    if (!mounted) return;
+    if (node == null) {
+      await showErrorDialog(context, '该存档的剧情进度已被删除');
+      return;
+    }
     try {
-      await StoryRepository(ref.read(dbProvider))
+      await StoryRepository(db)
           .setCurrentNode(widget.storyId, save.currentNodeId);
       await _refresh();
     } catch (e) {
@@ -359,6 +432,44 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
       return;
     }
     if (mounted) await showSuccessDialog(context, '已读档');
+  }
+
+  Future<void> _renameSave(StorySave save) async {
+    final controller = TextEditingController(text: save.label);
+    final label = await showDialog<String>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('重命名存档'),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (label == null || label.isEmpty) return;
+    await StoryRepository(ref.read(dbProvider)).renameSave(save.id, label);
+    if (mounted) await showSuccessDialog(context, '已重命名');
+  }
+
+  Future<void> _deleteSave(StorySave save) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: '删除存档',
+      message: '确定删除存档「${save.label}」？',
+      confirmLabel: '删除',
+    );
+    if (!ok) return;
+    await StoryRepository(ref.read(dbProvider)).deleteSave(save.id);
+    if (mounted) await showSuccessDialog(context, '已删除');
   }
 
   Future<void> _showBranchTree() async {
@@ -489,8 +600,8 @@ class _StoryPlayerScreenState extends ConsumerState<StoryPlayerScreen> {
                     : node == null
                         ? Center(
                             child: FilledButton.tonal(
-                              onPressed: _generateRoot,
-                              child: const Text('重新生成'),
+                              onPressed: _ensureRoot,
+                              child: const Text('继续剧情'),
                             ),
                           )
                         : SingleChildScrollView(

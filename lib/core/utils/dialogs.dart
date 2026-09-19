@@ -64,6 +64,43 @@ Future<bool> showConfirmDialog(
   return result ?? false;
 }
 
+/// A text-input dialog for pasting importable JSON. Returns the entered text
+/// (possibly empty) or null when cancelled.
+Future<String?> showPasteTextDialog(
+  BuildContext context, {
+  required String title,
+  String hint = '{...}',
+}) async {
+  final controller = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    useRootNavigator: false,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      content: SizedBox(
+        width: 400,
+        child: TextField(
+          controller: controller,
+          maxLines: 12,
+          decoration: InputDecoration(hintText: hint),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('导入'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return null;
+  return controller.text;
+}
+
 /// Asks whether to start a fresh conversation, resetting the character's
 /// relationship memory. Returns true for "全新开始", false for "继续", and
 /// null when dismissed (treated as "继续").

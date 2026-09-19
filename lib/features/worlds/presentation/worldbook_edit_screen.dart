@@ -34,6 +34,8 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
   List<dynamic> _sources = const [];
   bool _loading = false;
   bool _translating = false;
+  final _testController = TextEditingController();
+  String _testResult = '';
 
   @override
   void initState() {
@@ -119,7 +121,7 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
     final entries = <Map<String, dynamic>>[];
     for (final e in _entries) {
       final keys = e.keys.text
-          .split(RegExp(r'[,，]'))
+          .split(RegExp(r'[,，、]'))
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
@@ -176,6 +178,35 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
 
   void _addEntry() => setState(() => _entries.add(_EntryController()));
 
+  /// Tests which entries' keywords match a sample text, so users can verify
+  /// triggering before saving. Mirrors `WorldbookMatcher._containsAny`.
+  void _testTrigger() {
+    final input = _testController.text.trim();
+    if (input.isEmpty) {
+      setState(() => _testResult = '请输入一段文字');
+      return;
+    }
+    final matched = <String>[];
+    for (final e in _entries) {
+      final name = e.name.text.trim();
+      final keys = e.keys.text
+          .split(RegExp(r'[,，、]'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final hits = keys.where((k) => input.contains(k)).toList();
+      if (hits.isNotEmpty) {
+        matched.add('· ${name.isEmpty ? '（无名称条目）' : name}：'
+            '命中 ${hits.map((h) => '「$h」').join('、')}');
+      }
+    }
+    setState(() {
+      _testResult = matched.isEmpty
+          ? '没有命中任何条目，请检查并修改词条的关键词'
+          : '命中 ${matched.length} 条：\n${matched.join('\n')}';
+    });
+  }
+
   /// Translates all English entry keys to Chinese and appends them, so the
   /// worldbook triggers on Chinese messages too.
   Future<void> _translateKeys() async {
@@ -194,7 +225,7 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
       final allKeys = <String>[];
       for (final e in _entries) {
         final keys = e.keys.text
-            .split(RegExp(r'[,，]'))
+            .split(RegExp(r'[,，、]'))
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty);
         allKeys.addAll(keys.where(needsTranslation));
@@ -214,7 +245,7 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
 
       for (final e in _entries) {
         final keys = e.keys.text
-            .split(RegExp(r'[,，]'))
+            .split(RegExp(r'[,，、]'))
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty)
             .toList();
@@ -238,6 +269,7 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
   void dispose() {
     _name.dispose();
     _description.dispose();
+    _testController.dispose();
     for (final e in _entries) {
       e.name.dispose();
       e.keys.dispose();
@@ -286,7 +318,27 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
                       : const Icon(Icons.translate),
                   label: Text(_translating ? '翻译中…' : '翻译关键词（英→中）'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
+                Text('测试触发', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _testController,
+                  decoration: const InputDecoration(
+                    labelText: '输入一段文字',
+                    hintText: '模拟最近消息，测试哪些条目会被触发',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _testTrigger,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('测试'),
+                ),
+                if (_testResult.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(_testResult),
+                ],
+                const SizedBox(height: 16),
                 Text('条目', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 for (var i = 0; i < _entries.length; i++) _entryCard(i),

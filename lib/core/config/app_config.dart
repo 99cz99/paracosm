@@ -8,5 +8,5 @@ class AppConfig {
   static const String githubRepo = '99cz99/paracosm';
 
   /// Drift schema version. Bump on every structural migration.
-  static const int schemaVersion = 14;
+  static const int schemaVersion = 17;
 }

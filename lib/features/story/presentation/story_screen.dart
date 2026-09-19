@@ -59,7 +59,7 @@ class StoryScreen extends ConsumerWidget {
     final ok = await showConfirmDialog(
       context,
       title: '删除剧本',
-      message: '确定删除「${s.name}」？',
+      message: '确定删除「${s.name}」？其所有剧情进度和存档也会被删除。',
     );
     if (!ok) return;
     try {

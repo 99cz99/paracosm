@@ -184,6 +184,20 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
             // Session-level worldbook selection (overrides character binding).
             await m.addColumn(sessions, sessions.worldbookIdsJson);
           }
+          if (from < 15) {
+            // Per-session cumulative token accounting (summed each turn).
+            await m.addColumn(sessions, sessions.totalPromptTokens);
+            await m.addColumn(sessions, sessions.totalCompletionTokens);
+          }
+          if (from < 16) {
+            // Built-in assistant characters (角色/世界/世界书/使用助手).
+            await m.addColumn(characters, characters.builtInKey);
+          }
+          if (from < 17) {
+            // Character age fields (虚拟年龄 / 真实年龄), informational only.
+            await m.addColumn(characters, characters.virtualAge);
+            await m.addColumn(characters, characters.realAge);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -203,14 +217,29 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
   Future<Character?> getCharacterByName(String name) =>
       (select(characters)..where((t) => t.name.equals(name))).getSingleOrNull();
 
+  Future<Character?> getCharacterByBuiltInKey(String key) =>
+      (select(characters)..where((t) => t.builtInKey.equals(key)))
+          .getSingleOrNull();
+
+  /// Built-in assistant characters (non-null `builtInKey`), for the 助手 tab.
+  Future<List<Character>> getAssistants() => (select(characters)
+        ..where((t) => t.builtInKey.isNotNull())
+        ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+      .get();
+
   Stream<Character?> watchCharacter(String id) =>
       (select(characters)..where((t) => t.id.equals(id))).watchSingleOrNull();
 
   Future<void> insertCharacter(CharactersCompanion entry) =>
       into(characters).insert(entry);
 
-  Future<void> deleteCharacter(String id) =>
-      (delete(characters)..where((t) => t.id.equals(id))).go();
+  Future<void> deleteCharacter(String id) async {
+    // PairRelations.charA/charB have no FK, so clean up orphans manually.
+    await (delete(pairRelations)
+          ..where((t) => t.charA.equals(id) | t.charB.equals(id)))
+        .go();
+    await (delete(characters)..where((t) => t.id.equals(id))).go();
+  }
 
   Future<void> updateCharacter(String id, CharactersCompanion entry) =>
       (update(characters)..where((t) => t.id.equals(id))).write(entry);
@@ -361,12 +390,14 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
           .get();
 
   Future<int> nextGroupOrderIndex(String groupId) async {
-    final countExpr = groupMessages.id.count();
+    // Max+1 (not count) so a recalled message leaves no gap that would make the
+    // next insert collide with an existing orderIndex.
+    final maxExpr = groupMessages.orderIndex.max();
     final query = selectOnly(groupMessages)
-      ..addColumns([countExpr])
+      ..addColumns([maxExpr])
       ..where(groupMessages.groupId.equals(groupId));
     final row = await query.getSingle();
-    return row.read(countExpr) ?? 0;
+    return (row.read(maxExpr) ?? -1) + 1;
   }
 
   Future<void> insertGroupMessage(GroupMessagesCompanion entry) =>
@@ -388,6 +419,13 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
 
   Future<List<PairRelation>> getPairRelations(String groupId) =>
       (select(pairRelations)..where((t) => t.groupId.equals(groupId))).get();
+
+  Future<List<GroupMember>> getAllGroupMembers() => select(groupMembers).get();
+
+  Future<List<GroupWorld>> getAllGroupWorlds() => select(groupWorlds).get();
+
+  Future<List<GroupWorldbook>> getAllGroupWorldbooks() =>
+      select(groupWorldbooks).get();
 
   // ---------------------------------------------------------------------
   // Group memory (group-scoped state + rolling summary, isolated from chat)
@@ -502,6 +540,10 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
   Future<void> deleteStorySave(String id) =>
       (delete(storySaves)..where((t) => t.id.equals(id))).go();
 
+  Future<void> renameStorySave(String id, String label) =>
+      (update(storySaves)..where((t) => t.id.equals(id)))
+          .write(StorySavesCompanion(label: Value(label)));
+
   Future<List<StorySave>> getStorySaves(String storyId) =>
       (select(storySaves)
             ..where((t) => t.storyId.equals(storyId))
@@ -549,6 +591,23 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
     query.where(characterWorldbooks.characterId.equals(characterId));
     return query.watch().map(
         (rows) => rows.map((row) => row.readTable(worldbooks)).toList());
+  }
+
+  /// All character→worldbook bindings as a `characterId → worldbook names` map,
+  /// so list UIs can show a character's bound worldbooks without N queries.
+  Stream<Map<String, List<String>>> watchCharacterWorldbookNames() {
+    final query = select(characterWorldbooks).join([
+      innerJoin(worldbooks, worldbooks.id.equalsExp(characterWorldbooks.worldbookId)),
+    ]);
+    return query.watch().map((rows) {
+      final map = <String, List<String>>{};
+      for (final row in rows) {
+        final cw = row.readTable(characterWorldbooks);
+        final wb = row.readTable(worldbooks);
+        map.putIfAbsent(cw.characterId, () => []).add(wb.name);
+      }
+      return map;
+    });
   }
 
   Future<List<String>> getCharacterWorldbookIds(String characterId) async {
@@ -900,6 +959,24 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
   Future<List<Message>> searchMessages(String query) =>
       (select(messages)..where((t) => t.content.like('%$query%'))).get();
 
+  /// Message search joined with the session's character name, so results can
+  /// show which conversation each hit belongs to.
+  Future<List<({Message message, String characterName})>>
+      searchMessagesWithCharacter(String query) {
+    final q = (select(messages).join([
+      innerJoin(sessions, sessions.id.equalsExp(messages.sessionId)),
+      innerJoin(characters, characters.id.equalsExp(sessions.characterId)),
+    ]))
+      ..where(messages.content.like('%$query%'))
+      ..orderBy([OrderingTerm.desc(messages.timestamp)]);
+    return q.get().then((rows) => rows
+        .map((row) => (
+              message: row.readTable(messages),
+              characterName: row.readTable(characters).name,
+            ))
+        .toList());
+  }
+
   // ---------------------------------------------------------------------
   // Sessions
   // ---------------------------------------------------------------------
@@ -951,6 +1028,22 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
 
   Future<void> updateSession(String id, SessionsCompanion entry) =>
       (update(sessions)..where((t) => t.id.equals(id))).write(entry);
+
+  /// Adds one turn's token usage to the session's cumulative totals.
+  Future<void> addSessionTokens(
+    String id,
+    int promptTokens,
+    int completionTokens,
+  ) async {
+    final row = await getSession(id);
+    if (row == null) return;
+    await (update(sessions)..where((t) => t.id.equals(id)))
+        .write(SessionsCompanion(
+      totalPromptTokens: Value((row.totalPromptTokens ?? 0) + promptTokens),
+      totalCompletionTokens:
+          Value((row.totalCompletionTokens ?? 0) + completionTokens),
+    ));
+  }
 
   Future<void> deleteSession(String id) async {
     final session = await getSession(id);

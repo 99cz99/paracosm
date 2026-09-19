@@ -117,6 +117,9 @@ class StoryRepository {
 
   Future<void> deleteSave(String id) => _db.deleteStorySave(id);
 
+  Future<void> renameSave(String id, String label) =>
+      _db.renameStorySave(id, label);
+
   /// Overwrites a node's narrative + choices in place (regenerate).
   Future<void> editNode(String nodeId, String narrative, List<String> choices) =>
       _db.updateStoryNode(nodeId,

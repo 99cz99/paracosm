@@ -61,6 +61,27 @@ class ProfileScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/search'),
           ),
+          ListTile(
+            leading: const Icon(Icons.smart_toy_outlined),
+            title: const Text('助手'),
+            subtitle: const Text('角色 / 世界 / 世界书制作助手、软件使用助手'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/profile/assistants'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.menu_book_outlined),
+            title: const Text('制作规范'),
+            subtitle: const Text('角色卡 / 世界 / 世界书 / 角色包制作规范'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/profile/specs'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.help_outline),
+            title: const Text('使用手册'),
+            subtitle: const Text('软件功能与操作说明'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/profile/manual'),
+          ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.backup_outlined),

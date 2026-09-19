@@ -68,16 +68,24 @@ class StoryService {
     }
     final worldSection = worldCtx.buildWorldSection();
     if (worldSection.isNotEmpty) parts.add(worldSection);
+    const worldbookScan = 6;
+    final recentForBook = path.length <= worldbookScan
+        ? path
+        : path.sublist(path.length - worldbookScan);
     final worldbookContext = <String>[
       if (story.description.isNotEmpty) story.description,
-      ...path.map((n) => n.narrative),
+      ...recentForBook.map((n) => n.narrative),
     ].join('\n');
     final worldbookSection = worldCtx.buildWorldbookSection(worldbookContext);
     if (worldbookSection.isNotEmpty) parts.add(worldbookSection);
     if (path.isEmpty) {
       parts.add('请生成开场剧情（叙述 + 2-3 个选项）。');
     } else {
-      final flow = path.map((n) {
+      const maxHistory = 15;
+      final recent = path.length <= maxHistory
+          ? path
+          : path.sublist(path.length - maxHistory);
+      final flow = recent.map((n) {
         final line = n.narrative;
         final choices = _decodeChoices(n.choicesJson);
         if (n.chosenIndex != null && n.chosenIndex! < choices.length) {
@@ -86,6 +94,9 @@ class StoryService {
         return line;
       }).join('\n');
       parts.add('已发生的剧情：\n$flow');
+      if (path.length > maxHistory) {
+        parts.add('（前略 ${path.length - maxHistory} 段剧情）');
+      }
       parts.add('请生成接下来的剧情（叙述 + 2-3 个选项）。');
     }
     parts.add('若剧情已到达自然结局，choices 返回空数组 [] 表示结局。');

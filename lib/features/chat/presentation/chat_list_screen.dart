@@ -21,6 +21,10 @@ class ChatListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsAsync = ref.watch(sessionsProvider);
     final groupsAsync = ref.watch(groupsProvider);
+    final worldbookNamesByChar = ref
+            .watch(characterWorldbookNamesProvider)
+            .value ??
+        const <String, List<String>>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -38,7 +42,8 @@ class ChatListScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: _buildBody(context, ref, sessionsAsync, groupsAsync),
+      body: _buildBody(
+          context, ref, sessionsAsync, groupsAsync, worldbookNamesByChar),
     );
   }
 
@@ -47,6 +52,7 @@ class ChatListScreen extends ConsumerWidget {
     WidgetRef ref,
     AsyncValue<List<SessionWithCharacter>> sessionsAsync,
     AsyncValue<List<Group>> groupsAsync,
+    Map<String, List<String>> worldbookNamesByChar,
   ) {
     if (sessionsAsync.isLoading || groupsAsync.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -93,6 +99,8 @@ class ChatListScreen extends ConsumerWidget {
               subtitle: _subtitleWithWorldTags(
                 context,
                 worldNames: s.worldName == null ? const [] : [s.worldName!],
+                worldbookNames:
+                    worldbookNamesByChar[s.session.characterId] ?? const [],
                 timeText: _formatTime(s.session.lastMessageAt),
               ),
               onTap: () => context.push('/chat/${s.session.id}'),
@@ -204,6 +212,7 @@ class ChatListScreen extends ConsumerWidget {
   Widget _subtitleWithWorldTags(
     BuildContext context, {
     required List<String> worldNames,
+    List<String> worldbookNames = const [],
     required String timeText,
   }) {
     return Wrap(
@@ -212,6 +221,7 @@ class ChatListScreen extends ConsumerWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         for (final name in worldNames) _WorldTag(name),
+        for (final name in worldbookNames) _WorldbookTag(name),
         Text(timeText),
       ],
     );
@@ -235,6 +245,28 @@ class _WorldTag extends StatelessWidget {
       child: Text(
         name,
         style: TextStyle(fontSize: 11, color: scheme.onSecondaryContainer),
+      ),
+    );
+  }
+}
+
+class _WorldbookTag extends StatelessWidget {
+  const _WorldbookTag(this.name);
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        name,
+        style: TextStyle(fontSize: 11, color: scheme.onTertiaryContainer),
       ),
     );
   }

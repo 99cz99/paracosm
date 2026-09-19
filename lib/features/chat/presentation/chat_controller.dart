@@ -22,6 +22,16 @@ import '../data/memory_service.dart';
 /// A built system-prompt section; [text] already includes its `【label】` header.
 typedef PromptSection = ({String label, String text});
 
+/// Fallback instruction for how the character should read user messages, used
+/// when the character card carries no `post_history_instructions`.
+const String _defaultMessageHandling =
+    '【用户消息处理】\n'
+    '- 用户用 (()) 或 【】 包裹的内容是场外（OOC）说明，供你参考，不要当作剧情内言行复述。\n'
+    '- 其余内容按剧情内的言行与叙述理解，始终以角色身份在剧情内回应，不要跳出角色解释设定。\n'
+    '- {{user}} 指代用户本人，{{char}} 指代你自己。\n'
+    '- 用户一句话若含多个意图，请按顺序逐一回应。\n'
+    '- 延续上文的人称、视角与文风。';
+
 /// Estimated token usage for one would-be request (approximation).
 class TokenUsage {
   const TokenUsage({
@@ -43,16 +53,24 @@ class TokenUsage {
   int totalWith(int userInputTokens) => baseTokens + userInputTokens;
 }
 
-class ChatUiState {
-  const ChatUiState({
-    this.streamingText,
-    this.streamingSessionId,
-    this.isGenerating = false,
-  });
+/// Per-session streaming state, so multiple single chats can generate in
+/// parallel. Immutable — `select` on one session only rebuilds that chat.
+class StreamSessionState {
+  const StreamSessionState({required this.text, required this.isGenerating});
 
-  final String? streamingText;
-  final String? streamingSessionId;
+  final String text;
   final bool isGenerating;
+}
+
+class ChatUiState {
+  const ChatUiState({this.streams = const {}});
+
+  final Map<String, StreamSessionState> streams;
+
+  bool isGenerating(String sessionId) =>
+      streams[sessionId]?.isGenerating ?? false;
+
+  bool get anyGenerating => streams.values.any((s) => s.isGenerating);
 }
 
 final chatControllerProvider =
@@ -62,14 +80,20 @@ final chatControllerProvider =
 /// reply, render it as a typing effect, then persist the completed reply.
 class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
   static final _uuid = const Uuid();
-  var _cancelling = false;
+
+  /// Per-session in-flight streams. Keyed by sessionId so any number of single
+  /// chats can generate concurrently without stepping on each other.
+  final Map<String, _SessionStream> _streams = {};
 
   @override
   ChatUiState build() {
     WidgetsBinding.instance.addObserver(this);
     ref.onDispose(() {
       WidgetsBinding.instance.removeObserver(this);
-      _currentProvider?.cancel();
+      for (final s in _streams.values) {
+        s.provider?.cancel();
+      }
+      _streams.clear();
     });
     return const ChatUiState();
   }
@@ -80,17 +104,15 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     // background mid-reply; starting it in the foreground causes a UI hitch
     // (spawning the background engine) right when the user sends.
     if (state == AppLifecycleState.paused) {
-      if (this.state.isGenerating) unawaited(startReplyForeground());
+      if (this.state.anyGenerating) unawaited(startReplyForeground());
     } else if (state == AppLifecycleState.resumed) {
       unawaited(stopReplyForeground());
     }
   }
 
-  LlmProvider? _currentProvider;
-
   Future<void> sendMessage(String sessionId, String text) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || state.isGenerating) return;
+    if (trimmed.isEmpty || _streams[sessionId]?.isGenerating == true) return;
 
     // Slash commands run locally and never touch the LLM.
     if (trimmed.startsWith('/')) {
@@ -98,12 +120,6 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       return;
     }
 
-    _cancelling = false;
-    state = ChatUiState(
-      isGenerating: true,
-      streamingText: '',
-      streamingSessionId: sessionId,
-    );
     final db = ref.read(dbProvider);
 
     // 1. Persist the user message immediately.
@@ -122,7 +138,6 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     // 2. Load the session to pick its API + sampling params.
     final session = await db.getSession(sessionId);
     if (session == null) {
-      state = const ChatUiState();
       throw AppException('会话不存在');
     }
 
@@ -130,42 +145,56 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     final config = await resolveProvider(db, ref.read(secureKeyStoreProvider),
         providerId: session.providerId);
     if (config == null) {
-      state = const ChatUiState();
       throw AppException('请先在「我」中配置 API Provider');
     }
 
     // 4. Build the request from the session's character + history.
     final request = await _buildRequest(db, session);
 
-    // 4. Stream and accumulate.
-    final provider = buildLlmProvider(config);
-    _currentProvider = provider;
+    // 5. Stream and accumulate in a per-session slot so other single chats can
+    // keep generating concurrently.
+    final stream = _streams.putIfAbsent(sessionId, _SessionStream.new);
+    stream.isGenerating = true;
+    stream.cancelling = false;
+    stream.buffer.clear();
+    stream.provider = buildLlmProvider(config);
+    _setStream(sessionId, text: '', isGenerating: true);
 
-    final buffer = StringBuffer();
+    final provider = stream.provider!;
     String? finishReason;
+    int? promptTokens;
+    int? completionTokens;
     try {
       try {
         await for (final chunk in provider.streamChat(request)) {
           if (chunk.finishReason != null) finishReason = chunk.finishReason;
+          if (chunk.promptTokens != null) promptTokens = chunk.promptTokens;
+          if (chunk.completionTokens != null) {
+            completionTokens = chunk.completionTokens;
+          }
           final delta = chunk.textDelta;
           if (delta != null && delta.isNotEmpty) {
-            buffer.write(delta);
-            state = ChatUiState(
-              isGenerating: true,
-              streamingText: buffer.toString(),
-              streamingSessionId: sessionId,
-            );
+            stream.buffer.write(delta);
+            _setStream(sessionId,
+                text: stream.buffer.toString(), isGenerating: true);
           }
         }
       } catch (e) {
-        state = const ChatUiState();
-        if (_cancelling) return;
-        if (buffer.isNotEmpty) {
+        _clearStream(sessionId);
+        if (stream.cancelling) return;
+        if (stream.buffer.isNotEmpty) {
           // Stream interrupted mid-reply (e.g. network dropped) — persist the
           // partial text so it isn't lost, then stop quietly.
           try {
             if (await db.getSession(sessionId) != null) {
-              await _persistAssistant(db, sessionId, buffer.toString());
+              await _persistAssistant(
+                db,
+                sessionId,
+                stream.buffer.toString(),
+                promptTokens: promptTokens,
+                completionTokens: completionTokens,
+                model: config.model,
+              );
             }
           } catch (_) {}
           return;
@@ -176,9 +205,9 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       // Normal completion. Persist before clearing the streaming state so the
       // reply lands in the list before the streaming bubble is dropped — avoids
       // a one-frame flicker.
-      if (_cancelling) return; // don't persist a cancelled partial reply
-      if (buffer.isEmpty) {
-        state = const ChatUiState();
+      if (stream.cancelling) return; // don't persist a cancelled partial reply
+      if (stream.buffer.isEmpty) {
+        _clearStream(sessionId);
         throw AppException(
           finishReason == 'length' || finishReason == 'max_tokens'
               ? '回复未生成：已达最大 token 数限制。请调高「会话设置」里的最大 token（思考型模型建议 8192+）。'
@@ -187,23 +216,55 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       }
       try {
         if (await db.getSession(sessionId) != null) {
-          await _persistAssistant(db, sessionId, buffer.toString());
+          await _persistAssistant(
+            db,
+            sessionId,
+            stream.buffer.toString(),
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+            model: config.model,
+          );
+          await db.addSessionTokens(
+            sessionId,
+            promptTokens ?? 0,
+            completionTokens ?? 0,
+          );
           unawaited(_runMemoryUpdate(db, sessionId));
         }
       } catch (_) {
         // Session deleted mid-stream — nothing to persist.
       } finally {
-        state = const ChatUiState();
+        _clearStream(sessionId);
       }
     } finally {
-      await stopReplyForeground();
+      _streams.remove(sessionId);
+      if (_streams.isEmpty) await stopReplyForeground();
     }
   }
 
-  void cancel() {
-    _cancelling = true;
-    _currentProvider?.cancel();
-    state = const ChatUiState();
+  void cancel(String sessionId) {
+    final stream = _streams[sessionId];
+    if (stream == null) return;
+    stream.cancelling = true;
+    stream.provider?.cancel();
+    _clearStream(sessionId);
+  }
+
+  void _setStream(
+    String sessionId, {
+    required String text,
+    required bool isGenerating,
+  }) {
+    final next = Map<String, StreamSessionState>.from(state.streams);
+    next[sessionId] =
+        StreamSessionState(text: text, isGenerating: isGenerating);
+    state = ChatUiState(streams: next);
+  }
+
+  void _clearStream(String sessionId) {
+    final next = Map<String, StreamSessionState>.from(state.streams);
+    next.remove(sessionId);
+    state = ChatUiState(streams: next);
   }
 
   /// Executes a slash command locally: persists the user command + the app's
@@ -252,11 +313,19 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
   Future<void> _persistAssistant(
     AppDatabase db,
     String sessionId,
-    String content,
-  ) async {
+    String content, {
+    int? promptTokens,
+    int? completionTokens,
+    String? model,
+  }) async {
     if (content.isEmpty) return;
     final ts = DateTime.now().millisecondsSinceEpoch;
     final idx = await db.nextOrderIndex(sessionId);
+    final metadata = <String, dynamic>{
+      'promptTokens': ?promptTokens,
+      'completionTokens': ?completionTokens,
+      'model': ?model,
+    };
     await db.insertMessage(MessagesCompanion.insert(
       id: _uuid.v4(),
       sessionId: sessionId,
@@ -264,17 +333,40 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       content: content,
       orderIndex: idx,
       timestamp: ts,
+      metadata: Value(jsonEncode(metadata)),
     ));
     await db.touchSession(sessionId, ts);
   }
 
   Future<ChatRequest> _buildRequest(AppDatabase db, Session session) async {
     final built = await _buildSections(db, session);
+    final systemPrompt = _joinSections(built.sections);
+
+    // Hard-cap the context: if the assembled request exceeds the model's
+    // window (minus the output reserve), drop the oldest history messages
+    // first — they're already folded into the rolling summary, so trimming
+    // them is safe. Always keep the most recent two turns.
+    final limit = await _resolveContextLimit(db, session);
+    final outputReserve = session.maxTokens ?? 4096;
+    final rawBudget = limit - outputReserve;
+    final budget = rawBudget < 1 ? 1 : rawBudget;
+    final history = built.history;
+    var tokens = estimateTokens(systemPrompt ?? '');
+    for (final m in history) {
+      tokens += estimateTokens(m.content);
+    }
+    var start = 0;
+    while (tokens > budget && history.length - start > 2) {
+      tokens -= estimateTokens(history[start].content);
+      start++;
+    }
+
     return ChatRequest(
-      messages: built.history
+      messages: history
+          .sublist(start)
           .map((m) => ChatMessage(role: m.role, content: m.content))
           .toList(),
-      systemPrompt: _joinSections(built.sections),
+      systemPrompt: systemPrompt,
       temperature: session.temperature ?? 1.2,
       topP: session.topP ?? 1.0,
       maxTokens: session.maxTokens ?? 4096,
@@ -292,6 +384,9 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     final worldId = session.worldId ?? '';
     final adaptation = await db.getAdaptation(session.characterId, worldId);
     final allMessages = await db.getMessages(session.id);
+    // The opening example is only useful before the user's first real reply.
+    final hasUserReply =
+        allMessages.any((m) => m.role == 'user' && m.type != 'command');
 
     // summaryIndex is session-scoped; state + summary are world-scoped memory.
     final state = await db.getSessionState(session.id);
@@ -314,7 +409,12 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
 
     final sections = <PromptSection>[
       if (character != null)
-        ..._systemPromptSections(character, adaptation, affinity),
+        ..._systemPromptSections(
+          character,
+          adaptation,
+          affinity,
+          includeExample: !hasUserReply,
+        ),
       ..._memorySections(
         memory,
         relation,
@@ -394,14 +494,20 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       sections.add((label: '历史摘要', text: '【历史摘要】\n${memory.summaryText}'));
     }
     if (memory != null && memory.stateJson.isNotEmpty && memory.stateJson != '{}') {
-      sections.add((label: '当前状态', text: '【当前状态】\n${memory.stateJson}'));
+      final formatted = formatStateForPrompt(memory.stateJson);
+      if (formatted.isNotEmpty) {
+        sections.add((label: '当前状态', text: '【当前状态】\n$formatted'));
+      }
     }
     if (!skipRelation &&
         relation != null &&
         relation.relationJson.isNotEmpty &&
         relation.relationJson != '{}') {
-      sections.add(
-          (label: '你与用户的关系', text: '【你与用户的关系】\n${relation.relationJson}'));
+      final formatted = formatRelationForPrompt(relation.relationJson);
+      if (formatted.isNotEmpty) {
+        sections.add(
+            (label: '你与用户的关系', text: '【你与用户的关系】\n$formatted'));
+      }
     }
     return sections;
   }
@@ -427,11 +533,13 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     final recentContext = recent.map((m) => m.content).join('\n');
     final worldSection = worldCtx.buildWorldSection();
     // The character's own built-in worldbook + bound library/world worldbooks.
-    final entries = <String>[
+    // A set literal dedupes across the character's built-in book and the bound
+    // library/world books (same entry can trigger from both).
+    final entries = <String>{
       if (character != null)
         ...WorldbookMatcher.triggered(character.worldbookJson, recentContext),
       ...worldCtx.matchedEntries(recentContext),
-    ];
+    }.toList();
     final worldbookSection =
         entries.isEmpty ? '' : '【世界书】\n${entries.join('\n\n')}';
 
@@ -444,7 +552,13 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
   }
 
   Future<void> _runMemoryUpdate(AppDatabase db, String sessionId) async {
-    final config = await resolveActiveProvider(db, ref.read(secureKeyStoreProvider));
+    final session = await db.getSession(sessionId);
+    if (session == null) return;
+    final config = await resolveProvider(
+      db,
+      ref.read(secureKeyStoreProvider),
+      providerId: session.providerId,
+    );
     if (config == null) return;
     try {
       await MemoryService(db).updateAfterTurn(
@@ -459,8 +573,9 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
   List<PromptSection> _systemPromptSections(
     Character character,
     CharacterAdaptation? adaptation,
-    Map<String, dynamic>? affinity,
-  ) {
+    Map<String, dynamic>? affinity, {
+    bool includeExample = true,
+  }) {
     Map<String, dynamic> core;
     try {
       core = jsonDecode(character.corePersonaJson) as Map<String, dynamic>;
@@ -474,6 +589,7 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     final scenario = core['scenario']?.toString() ?? '';
     final systemPrompt = core['system_prompt']?.toString() ?? '';
     final firstMes = core['first_mes']?.toString() ?? '';
+    final postHistory = core['post_history_instructions']?.toString() ?? '';
 
     if (description.isNotEmpty) {
       sections.add((label: '角色设定', text: '【角色设定】\n$description'));
@@ -484,6 +600,19 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     if (scenario.isNotEmpty) {
       sections.add((label: '场景', text: '【场景】\n$scenario'));
     }
+    final virtualAge = character.virtualAge?.trim() ?? '';
+    final realAge = character.realAge?.trim() ?? '';
+    if (virtualAge.isNotEmpty || realAge.isNotEmpty) {
+      final lines = <String>[
+        if (virtualAge.isNotEmpty) '角色对外呈现/自称的年龄：$virtualAge',
+        if (realAge.isNotEmpty)
+          '设定内实际年龄：$realAge（幕后设定，仅用于判断角色已成年；被问及年龄时不按这个回答）',
+      ];
+      if (virtualAge.isNotEmpty && realAge.isNotEmpty) {
+        lines.add('被问及年龄时，按「角色对外呈现/自称的年龄」回答。');
+      }
+      sections.add((label: '年龄', text: '【年龄】\n${lines.join('\n')}'));
+    }
     // Raw skill/system prompt — added without a 【】 header.
     if (systemPrompt.isNotEmpty) {
       sections.add((label: '系统提示', text: systemPrompt));
@@ -492,7 +621,8 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       sections.add(
           (label: '好感度状态', text: '【好感度状态】\n${jsonEncode(affinity)}'));
     }
-    if (firstMes.isNotEmpty) {
+    // The opening example is dropped once the user has replied (redundant).
+    if (firstMes.isNotEmpty && includeExample) {
       sections.add((label: '开场白示例', text: '【开场白示例】\n$firstMes'));
     }
 
@@ -501,6 +631,14 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     final persona = _adaptationPersona(adaptation);
     if (persona.isNotEmpty) {
       sections.add((label: '世界适配', text: '【世界适配】\n$persona'));
+    }
+
+    // How to read user messages: the character's own instruction when present,
+    // otherwise the app's concise default.
+    if (postHistory.isNotEmpty) {
+      sections.add((label: '后置指令', text: '【后置指令】\n$postHistory'));
+    } else {
+      sections.add((label: '用户消息处理', text: _defaultMessageHandling));
     }
 
     return sections;
@@ -542,4 +680,13 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       return '';
     }
   }
+}
+
+/// Mutable per-session streaming state held by [ChatController]. Kept out of
+/// [ChatUiState] (which is immutable) so the map is cheap to copy per delta.
+class _SessionStream {
+  LlmProvider? provider;
+  final StringBuffer buffer = StringBuffer();
+  bool cancelling = false;
+  bool isGenerating = false;
 }

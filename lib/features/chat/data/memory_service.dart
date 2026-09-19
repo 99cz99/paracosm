@@ -20,16 +20,19 @@ class MemoryService {
   final AppDatabase _db;
 
   /// Summarize when unsummarized messages exceed this count.
-  static const int summaryWindow = 20;
+  static const int summaryWindow = 8;
 
   /// Keep this many recent messages unsummarized after a run.
-  static const int keepRecent = 8;
+  static const int keepRecent = 4;
 
   /// Scan this many recent messages for worldbook keywords.
   static const int worldbookScanMessages = 6;
 
   /// How many recent messages the skill-growth reflection sees.
   static const int growthReflectWindow = 12;
+
+  /// How many recent messages the state/relation extraction sees each turn.
+  static const int stateExtractWindow = 6;
 
   /// Builds a provider for memory tasks, overriding the model with
   /// [LlmProviderConfig.memoryModel] when set (the "cheap model").
@@ -148,7 +151,14 @@ class MemoryService {
     final existing = memory?.summaryText ?? '';
     final transcript =
         toSummarize.map((m) => '${m.role}: ${m.content}').join('\n');
-    final summary = await _summarize(provider, existing, transcript);
+    var summary = await _summarize(provider, existing, transcript);
+    if (summary.isEmpty) {
+      // Reasoning models can burn their token budget and return nothing —
+      // retry once. If still empty, leave the cursor alone so those messages
+      // are not silently dropped into a void (they'll be retried next turn).
+      summary = await _summarize(provider, existing, transcript);
+    }
+    if (summary.isEmpty) return;
 
     // Summary is world-scoped (survives session deletion); summaryIndex stays
     // session-scoped (marks how far this session has been summarized).
@@ -171,13 +181,14 @@ class MemoryService {
     String transcript,
   ) async {
     final prompt = existing.isEmpty
-        ? '把以下对话压缩成简短摘要（保留关键事实、人物状态、未完成的事）：\n\n$transcript\n\n摘要：'
-        : '已有摘要：\n$existing\n\n新增对话：\n$transcript\n\n把两者合并成一份更完整但仍简短的摘要：';
+        ? '把以下对话压缩成简短摘要（保留关键事件、未完成的事、地点与时间线索、人物状态与关系变化、重要物件）：\n\n$transcript\n\n摘要：'
+        : '已有摘要：\n$existing\n\n新增对话：\n$transcript\n\n'
+            '把两者合并成一份更完整但仍简短的摘要（控制在 300 字内，保留关键事件、未完成的事、地点/时间、人物关系变化）：';
     final text = await _complete(
       provider,
       prompt,
       systemPrompt: '你是对话摘要器，输出简洁中文，不要任何标记。',
-      maxTokens: 512,
+      maxTokens: 2048,
       temperature: 0.3,
     );
     return text.trim();
@@ -189,13 +200,13 @@ class MemoryService {
     LlmProvider provider,
     List<Message> messages,
   ) async {
-    final exchange = _lastExchange(messages);
-    if (exchange == null) return;
+    final transcript = _recentTranscript(messages);
+    if (transcript.isEmpty) return;
     final memory = await _db.getCharacterMemory(characterId, worldId);
     final currentState = memory?.stateJson ?? '{}';
     final newState = await _extractJson(
       provider,
-      _statePrompt(currentState, exchange),
+      _statePrompt(currentState, transcript),
       fallback: currentState,
     );
     await _db.upsertCharacterMemory(CharacterMemoriesCompanion.insert(
@@ -212,13 +223,13 @@ class MemoryService {
     LlmProvider provider,
     List<Message> messages,
   ) async {
-    final exchange = _lastExchange(messages);
-    if (exchange == null) return;
+    final transcript = _recentTranscript(messages);
+    if (transcript.isEmpty) return;
     final relation = await _db.getCharacterRelation(characterId, worldId);
     final currentRelation = relation?.relationJson ?? '{}';
     final newRelation = await _extractJson(
       provider,
-      _relationPrompt(currentRelation, exchange),
+      _relationPrompt(currentRelation, transcript),
       fallback: currentRelation,
     );
     await _db.upsertCharacterRelation(CharacterRelationsCompanion.insert(
@@ -319,30 +330,37 @@ class MemoryService {
     ));
   }
 
-  ({String user, String assistant})? _lastExchange(List<Message> messages) {
-    Message? assistant;
-    Message? user;
-    for (final m in messages.reversed) {
-      if (m.role == 'assistant' && assistant == null) assistant = m;
-      if (m.role == 'user' && assistant != null) {
-        user = m;
-        break;
-      }
-    }
-    if (assistant == null || user == null) return null;
-    return (user: user.content, assistant: assistant.content);
+  /// Builds a transcript of the most recent visible (user/assistant) messages
+  /// for state/relation extraction. A window (rather than only the last turn)
+  /// keeps key facts from slipping away between summary runs.
+  String _recentTranscript(List<Message> messages) {
+    final visible = messages
+        .where((m) => m.role == 'user' || m.role == 'assistant')
+        .toList();
+    final recent = visible.length <= stateExtractWindow
+        ? visible
+        : visible.sublist(visible.length - stateExtractWindow);
+    return recent.map((m) => '${m.role}: ${m.content}').join('\n');
   }
 
-  String _statePrompt(String state, ({String user, String assistant}) ex) {
-    final seed = state == '{}' ? '{"scene":"","facts":[],"items":[],"npcs":{}}' : state;
-    return '当前状态 JSON：\n$seed\n\n最新对话：\n用户：${ex.user}\n角色：${ex.assistant}\n\n根据对话更新状态 JSON（保持结构，只改变化的部分），只输出 JSON。';
+  String _statePrompt(String state, String transcript) {
+    final seed = state == '{}'
+        ? '{"time":"","place":"","scene":"","environment":"","char_outfit":"","char_body":"","nearby_items":[],"npcs":{},"style":{"person":"","perspective":"","onomatopoeia":""},"facts":[]}'
+        : state;
+    return '当前状态 JSON：\n$seed\n\n最近对话：\n$transcript\n\n'
+        '根据对话更新状态 JSON（保持结构，只改变化的部分），覆盖维度：'
+        'time 时间、place 地点、scene 场景、environment 环境、'
+        'char_outfit 角色服装、char_body 角色身体、nearby_items 周围物品、'
+        'npcs 在场人物、style.person 人称、style.perspective 视角、'
+        'style.onomatopoeia 拟声词风格、facts 已确认事实。只输出 JSON。';
   }
 
-  String _relationPrompt(String relation, ({String user, String assistant}) ex) {
+  String _relationPrompt(String relation, String transcript) {
     final seed = relation == '{}'
         ? '{"affection":0,"trust":0,"intimacy":0,"notes":""}'
         : relation;
-    return '当前关系 JSON：\n$seed\n\n最新对话：\n用户：${ex.user}\n角色：${ex.assistant}\n\n根据对话更新关系 JSON（好感/信任/亲密度 0-100，notes 简述），只输出 JSON。';
+    return '当前关系 JSON：\n$seed\n\n最近对话：\n$transcript\n\n'
+        '根据对话更新关系 JSON（好感/信任/亲密度 0-100，notes 简述），只输出 JSON。';
   }
 
   Future<String> _extractJson(

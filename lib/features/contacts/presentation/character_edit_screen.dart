@@ -39,6 +39,8 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
   final _postHistoryInstructions = TextEditingController();
   final _stateSchema = TextEditingController();
   final _tagController = TextEditingController();
+  final _virtualAge = TextEditingController();
+  final _realAge = TextEditingController();
 
   Map<String, dynamic> _core = {};
   List<String> _tags = [];
@@ -72,6 +74,8 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
         (_core['post_history_instructions'] ?? '').toString();
     _stateSchema.text = _encodeStateSchema(_core['state_schema']);
     _tags = _decodeTags(character.tags);
+    _virtualAge.text = character.virtualAge ?? '';
+    _realAge.text = character.realAge ?? '';
     if (mounted) setState(() {});
   }
 
@@ -147,6 +151,8 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
           core: core,
           tags: _tags,
           avatarPath: _avatarPath,
+          virtualAge: _virtualAge.text.trim(),
+          realAge: _realAge.text.trim(),
         );
       } else {
         await ref.read(dbProvider).updateCharacter(
@@ -156,6 +162,8 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
                 corePersonaJson: Value(jsonEncode(core)),
                 tags: Value(jsonEncode(_tags)),
                 avatarPath: Value(_avatarPath),
+                virtualAge: Value(_virtualAge.text.trim()),
+                realAge: Value(_realAge.text.trim()),
                 updatedAt: Value(now),
               ),
             );
@@ -186,6 +194,8 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
     _postHistoryInstructions.dispose();
     _stateSchema.dispose();
     _tagController.dispose();
+    _virtualAge.dispose();
+    _realAge.dispose();
     super.dispose();
   }
 
@@ -278,6 +288,22 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
                         ],
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _virtualAge,
+                  decoration: const InputDecoration(
+                    labelText: '虚拟年龄',
+                    helperText: '角色的设定/外表年龄，如「外表16岁」',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _realAge,
+                  decoration: const InputDecoration(
+                    labelText: '真实年龄',
+                    helperText: '设定内实际年龄，用于声明成年，如「实际500岁」',
                   ),
                 ),
                 const SizedBox(height: 12),

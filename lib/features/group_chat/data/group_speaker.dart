@@ -7,7 +7,7 @@ class GroupSpeaker {
   static String? determine({
     required String mode,
     required List<({String id, String name, int joinOrder})> members,
-    required int assistantCount,
+    String? lastSpeakerId,
     String? userText,
   }) {
     if (members.isEmpty) return null;
@@ -15,7 +15,10 @@ class GroupSpeaker {
       case 'turn':
         final sorted = [...members]
           ..sort((a, b) => a.joinOrder.compareTo(b.joinOrder));
-        return sorted[assistantCount % sorted.length].id;
+        if (lastSpeakerId == null) return sorted.first.id;
+        final idx = sorted.indexWhere((m) => m.id == lastSpeakerId);
+        final next = idx < 0 ? 0 : (idx + 1) % sorted.length;
+        return sorted[next].id;
       case 'call':
         return _mentioned(userText, members)?.id;
       case 'auto':

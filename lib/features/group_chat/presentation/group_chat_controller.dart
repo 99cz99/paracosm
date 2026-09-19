@@ -59,7 +59,13 @@ class GroupChatController extends Notifier<GroupChatUiState> {
     _cancelling = false;
     final db = ref.read(dbProvider);
 
-    // 1. Persist the user message.
+    // 1. Load the group first — check it still exists before persisting so a
+    // concurrently-deleted group fails cleanly instead of hitting the FK.
+    final group = await db.getGroup(groupId);
+    if (group == null) throw AppException('群聊不存在');
+    final members = await db.watchMembersFor(groupId).first;
+
+    // 2. Persist the user message.
     final now = DateTime.now().millisecondsSinceEpoch;
     final userIdx = await db.nextGroupOrderIndex(groupId);
     await db.insertGroupMessage(GroupMessagesCompanion.insert(
@@ -71,11 +77,6 @@ class GroupChatController extends Notifier<GroupChatUiState> {
       timestamp: now,
     ));
     await db.touchGroup(groupId, now);
-
-    // 2. Load the group (to pick its per-group provider).
-    final group = await db.getGroup(groupId);
-    final members = await db.watchMembersFor(groupId).first;
-    if (group == null) throw AppException('群聊不存在');
 
     // 3. Resolve provider (per-group override, else default).
     final config = await resolveProvider(db, ref.read(secureKeyStoreProvider),
@@ -93,11 +94,17 @@ class GroupChatController extends Notifier<GroupChatUiState> {
             ))
         .toList();
     final history = await db.getGroupMessages(groupId);
-    final assistantCount = history.where((m) => m.role == 'assistant').length;
+    String? lastSpeakerId;
+    for (final m in history.reversed) {
+      if (m.role == 'assistant') {
+        lastSpeakerId = m.speakerCharacterId;
+        break;
+      }
+    }
     final forcedSpeakerId = GroupSpeaker.determine(
       mode: group.speakMode,
       members: memberInfos,
-      assistantCount: assistantCount,
+      lastSpeakerId: lastSpeakerId,
       userText: trimmed,
     );
 
@@ -264,8 +271,14 @@ class GroupChatController extends Notifier<GroupChatUiState> {
   }
 
   Future<void> _runPairExtraction(AppDatabase db, String groupId) async {
-    final config =
-        await resolveActiveProvider(db, ref.read(secureKeyStoreProvider));
+    final group = await db.getGroup(groupId);
+    if (group == null) return;
+    // Throttle: relations evolve slowly, so re-extract every 3rd turn only.
+    final messages = await db.getGroupMessages(groupId);
+    final assistantCount = messages.where((m) => m.role == 'assistant').length;
+    if (assistantCount % 3 != 0) return;
+    final config = await resolveProvider(db, ref.read(secureKeyStoreProvider),
+        providerId: group.providerId);
     if (config == null) return;
     try {
       await GroupService(db)
@@ -276,8 +289,10 @@ class GroupChatController extends Notifier<GroupChatUiState> {
   }
 
   Future<void> _runGroupMemoryUpdate(AppDatabase db, String groupId) async {
-    final config =
-        await resolveActiveProvider(db, ref.read(secureKeyStoreProvider));
+    final group = await db.getGroup(groupId);
+    if (group == null) return;
+    final config = await resolveProvider(db, ref.read(secureKeyStoreProvider),
+        providerId: group.providerId);
     if (config == null) return;
     try {
       await GroupMemoryService(db)

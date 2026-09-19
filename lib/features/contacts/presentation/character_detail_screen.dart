@@ -67,6 +67,8 @@ class CharacterDetailScreen extends ConsumerWidget {
       ..._section(context, '角色设定', core['description']),
       ..._section(context, '性格', core['personality']),
       ..._section(context, '场景', core['scenario']),
+      ..._section(context, '虚拟年龄', c.virtualAge),
+      ..._section(context, '真实年龄', c.realAge),
       ..._section(context, '开场白', core['first_mes']),
       ..._section(context, '对话示例', core['mes_example']),
       ..._section(context, '系统提示', core['system_prompt']),
@@ -564,6 +566,7 @@ class CharacterDetailScreen extends ConsumerWidget {
         options: [for (final b in allBooks) MultiSelectOption(b.id, b.name)],
         initial: charBound,
       );
+      if (selectedWorldbookIds == null) return; // 点空白关闭 = 取消
     }
 
     final worldKey = selectedWorldId ?? '';

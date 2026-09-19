@@ -9,6 +9,12 @@ final sessionsProvider = StreamProvider<List<SessionWithCharacter>>((ref) {
   return ref.watch(dbProvider).watchSessionsWithCharacter();
 });
 
+/// Character → bound worldbook names, for showing worldbook tags in the chat list.
+final characterWorldbookNamesProvider =
+    StreamProvider<Map<String, List<String>>>((ref) {
+  return ref.watch(dbProvider).watchCharacterWorldbookNames();
+});
+
 final messagesProvider = StreamProvider.family<List<Message>, String>(
   (ref, sessionId) => ref.watch(dbProvider).watchMessages(sessionId),
 );
@@ -48,3 +54,20 @@ final tokenUsageProvider = FutureProvider.family<TokenUsage, String>(
         .estimateTokenUsage(db, session, '');
   },
 );
+
+/// The session's cumulative token consumption (prompt/completion), refreshed as
+/// messages are added (each assistant turn persists its API-reported usage).
+final sessionTokensProvider = FutureProvider.family<
+    ({int promptTokens, int completionTokens}), String>((
+  ref,
+  sessionId,
+) async {
+  ref.watch(messagesProvider(sessionId));
+  final db = ref.watch(dbProvider);
+  final session = await db.getSession(sessionId);
+  if (session == null) return (promptTokens: 0, completionTokens: 0);
+  return (
+    promptTokens: session.totalPromptTokens ?? 0,
+    completionTokens: session.totalCompletionTokens ?? 0,
+  );
+});

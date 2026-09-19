@@ -238,20 +238,19 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   }
 
   Future<void> _editWorlds(Group group) async {
+    final db = ref.read(dbProvider);
     final worlds = ref.read(worldsProvider).value ?? [];
-    final current = ref.read(groupWorldsProvider(widget.groupId)).value ?? [];
+    final currentIds = await db.getGroupWorldIds(widget.groupId);
+    if (!mounted) return;
     final selected = await showMultiSelectSheet(
       context,
       title: '选择世界',
       options: [for (final w in worlds) MultiSelectOption(w.id, w.name)],
-      initial: {for (final w in current) w.id},
+      initial: currentIds.toSet(),
     );
     if (selected == null) return;
-    final worldbookIds =
-        (ref.read(groupWorldbooksProvider(widget.groupId)).value ?? [])
-            .map((b) => b.id)
-            .toList();
-    await GroupRepository(ref.read(dbProvider)).updateGroupWorlds(
+    final worldbookIds = await db.getGroupWorldbookIds(widget.groupId);
+    await GroupRepository(db).updateGroupWorlds(
       groupId: widget.groupId,
       worldIds: selected,
       worldbookIds: worldbookIds,
@@ -259,19 +258,19 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   }
 
   Future<void> _editWorldbooks(Group group) async {
+    final db = ref.read(dbProvider);
     final worldbooks = ref.read(worldbooksProvider).value ?? [];
-    final current = ref.read(groupWorldbooksProvider(widget.groupId)).value ?? [];
+    final currentIds = await db.getGroupWorldbookIds(widget.groupId);
+    if (!mounted) return;
     final selected = await showMultiSelectSheet(
       context,
       title: '选择世界书',
       options: [for (final b in worldbooks) MultiSelectOption(b.id, b.name)],
-      initial: {for (final b in current) b.id},
+      initial: currentIds.toSet(),
     );
     if (selected == null) return;
-    final worldIds = (ref.read(groupWorldsProvider(widget.groupId)).value ?? [])
-        .map((w) => w.id)
-        .toList();
-    await GroupRepository(ref.read(dbProvider)).updateGroupWorlds(
+    final worldIds = await db.getGroupWorldIds(widget.groupId);
+    await GroupRepository(db).updateGroupWorlds(
       groupId: widget.groupId,
       worldIds: worldIds,
       worldbookIds: selected,

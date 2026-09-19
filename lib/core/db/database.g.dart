@@ -125,6 +125,39 @@ class $CharactersTable extends Characters
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _builtInKeyMeta = const VerificationMeta(
+    'builtInKey',
+  );
+  @override
+  late final GeneratedColumn<String> builtInKey = GeneratedColumn<String>(
+    'built_in_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _virtualAgeMeta = const VerificationMeta(
+    'virtualAge',
+  );
+  @override
+  late final GeneratedColumn<String> virtualAge = GeneratedColumn<String>(
+    'virtual_age',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _realAgeMeta = const VerificationMeta(
+    'realAge',
+  );
+  @override
+  late final GeneratedColumn<String> realAge = GeneratedColumn<String>(
+    'real_age',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -138,6 +171,9 @@ class $CharactersTable extends Characters
     createdAt,
     updatedAt,
     pinnedAt,
+    builtInKey,
+    virtualAge,
+    realAge,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -232,6 +268,27 @@ class $CharactersTable extends Characters
         pinnedAt.isAcceptableOrUnknown(data['pinned_at']!, _pinnedAtMeta),
       );
     }
+    if (data.containsKey('built_in_key')) {
+      context.handle(
+        _builtInKeyMeta,
+        builtInKey.isAcceptableOrUnknown(
+          data['built_in_key']!,
+          _builtInKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('virtual_age')) {
+      context.handle(
+        _virtualAgeMeta,
+        virtualAge.isAcceptableOrUnknown(data['virtual_age']!, _virtualAgeMeta),
+      );
+    }
+    if (data.containsKey('real_age')) {
+      context.handle(
+        _realAgeMeta,
+        realAge.isAcceptableOrUnknown(data['real_age']!, _realAgeMeta),
+      );
+    }
     return context;
   }
 
@@ -285,6 +342,18 @@ class $CharactersTable extends Characters
         DriftSqlType.int,
         data['${effectivePrefix}pinned_at'],
       ),
+      builtInKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}built_in_key'],
+      ),
+      virtualAge: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}virtual_age'],
+      ),
+      realAge: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}real_age'],
+      ),
     );
   }
 
@@ -316,6 +385,15 @@ class Character extends DataClass implements Insertable<Character> {
 
   /// 置顶时间戳；null = 未置顶（联系人列表置顶区按此倒序）。
   final int? pinnedAt;
+
+  /// 内置助手标识（角色/世界/世界书/使用助手）；null = 普通角色。
+  final String? builtInKey;
+
+  /// 虚拟年龄（角色设定/外表年龄，自由文本）。
+  final String? virtualAge;
+
+  /// 真实年龄（设定内实际年龄，自由文本，用于声明成年）。
+  final String? realAge;
   const Character({
     required this.id,
     required this.name,
@@ -328,6 +406,9 @@ class Character extends DataClass implements Insertable<Character> {
     required this.createdAt,
     required this.updatedAt,
     this.pinnedAt,
+    this.builtInKey,
+    this.virtualAge,
+    this.realAge,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -350,6 +431,15 @@ class Character extends DataClass implements Insertable<Character> {
     map['updated_at'] = Variable<int>(updatedAt);
     if (!nullToAbsent || pinnedAt != null) {
       map['pinned_at'] = Variable<int>(pinnedAt);
+    }
+    if (!nullToAbsent || builtInKey != null) {
+      map['built_in_key'] = Variable<String>(builtInKey);
+    }
+    if (!nullToAbsent || virtualAge != null) {
+      map['virtual_age'] = Variable<String>(virtualAge);
+    }
+    if (!nullToAbsent || realAge != null) {
+      map['real_age'] = Variable<String>(realAge);
     }
     return map;
   }
@@ -375,6 +465,15 @@ class Character extends DataClass implements Insertable<Character> {
       pinnedAt: pinnedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(pinnedAt),
+      builtInKey: builtInKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(builtInKey),
+      virtualAge: virtualAge == null && nullToAbsent
+          ? const Value.absent()
+          : Value(virtualAge),
+      realAge: realAge == null && nullToAbsent
+          ? const Value.absent()
+          : Value(realAge),
     );
   }
 
@@ -395,6 +494,9 @@ class Character extends DataClass implements Insertable<Character> {
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       pinnedAt: serializer.fromJson<int?>(json['pinnedAt']),
+      builtInKey: serializer.fromJson<String?>(json['builtInKey']),
+      virtualAge: serializer.fromJson<String?>(json['virtualAge']),
+      realAge: serializer.fromJson<String?>(json['realAge']),
     );
   }
   @override
@@ -412,6 +514,9 @@ class Character extends DataClass implements Insertable<Character> {
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'pinnedAt': serializer.toJson<int?>(pinnedAt),
+      'builtInKey': serializer.toJson<String?>(builtInKey),
+      'virtualAge': serializer.toJson<String?>(virtualAge),
+      'realAge': serializer.toJson<String?>(realAge),
     };
   }
 
@@ -427,6 +532,9 @@ class Character extends DataClass implements Insertable<Character> {
     int? createdAt,
     int? updatedAt,
     Value<int?> pinnedAt = const Value.absent(),
+    Value<String?> builtInKey = const Value.absent(),
+    Value<String?> virtualAge = const Value.absent(),
+    Value<String?> realAge = const Value.absent(),
   }) => Character(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -441,6 +549,9 @@ class Character extends DataClass implements Insertable<Character> {
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     pinnedAt: pinnedAt.present ? pinnedAt.value : this.pinnedAt,
+    builtInKey: builtInKey.present ? builtInKey.value : this.builtInKey,
+    virtualAge: virtualAge.present ? virtualAge.value : this.virtualAge,
+    realAge: realAge.present ? realAge.value : this.realAge,
   );
   Character copyWithCompanion(CharactersCompanion data) {
     return Character(
@@ -465,6 +576,13 @@ class Character extends DataClass implements Insertable<Character> {
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       pinnedAt: data.pinnedAt.present ? data.pinnedAt.value : this.pinnedAt,
+      builtInKey: data.builtInKey.present
+          ? data.builtInKey.value
+          : this.builtInKey,
+      virtualAge: data.virtualAge.present
+          ? data.virtualAge.value
+          : this.virtualAge,
+      realAge: data.realAge.present ? data.realAge.value : this.realAge,
     );
   }
 
@@ -481,7 +599,10 @@ class Character extends DataClass implements Insertable<Character> {
           ..write('sourcePath: $sourcePath, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('pinnedAt: $pinnedAt')
+          ..write('pinnedAt: $pinnedAt, ')
+          ..write('builtInKey: $builtInKey, ')
+          ..write('virtualAge: $virtualAge, ')
+          ..write('realAge: $realAge')
           ..write(')'))
         .toString();
   }
@@ -499,6 +620,9 @@ class Character extends DataClass implements Insertable<Character> {
     createdAt,
     updatedAt,
     pinnedAt,
+    builtInKey,
+    virtualAge,
+    realAge,
   );
   @override
   bool operator ==(Object other) =>
@@ -514,7 +638,10 @@ class Character extends DataClass implements Insertable<Character> {
           other.sourcePath == this.sourcePath &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
-          other.pinnedAt == this.pinnedAt);
+          other.pinnedAt == this.pinnedAt &&
+          other.builtInKey == this.builtInKey &&
+          other.virtualAge == this.virtualAge &&
+          other.realAge == this.realAge);
 }
 
 class CharactersCompanion extends UpdateCompanion<Character> {
@@ -529,6 +656,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int?> pinnedAt;
+  final Value<String?> builtInKey;
+  final Value<String?> virtualAge;
+  final Value<String?> realAge;
   final Value<int> rowid;
   const CharactersCompanion({
     this.id = const Value.absent(),
@@ -542,6 +672,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.pinnedAt = const Value.absent(),
+    this.builtInKey = const Value.absent(),
+    this.virtualAge = const Value.absent(),
+    this.realAge = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CharactersCompanion.insert({
@@ -556,6 +689,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     required int createdAt,
     required int updatedAt,
     this.pinnedAt = const Value.absent(),
+    this.builtInKey = const Value.absent(),
+    this.virtualAge = const Value.absent(),
+    this.realAge = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -575,6 +711,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? pinnedAt,
+    Expression<String>? builtInKey,
+    Expression<String>? virtualAge,
+    Expression<String>? realAge,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -589,6 +728,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (pinnedAt != null) 'pinned_at': pinnedAt,
+      if (builtInKey != null) 'built_in_key': builtInKey,
+      if (virtualAge != null) 'virtual_age': virtualAge,
+      if (realAge != null) 'real_age': realAge,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -605,6 +747,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int?>? pinnedAt,
+    Value<String?>? builtInKey,
+    Value<String?>? virtualAge,
+    Value<String?>? realAge,
     Value<int>? rowid,
   }) {
     return CharactersCompanion(
@@ -619,6 +764,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       pinnedAt: pinnedAt ?? this.pinnedAt,
+      builtInKey: builtInKey ?? this.builtInKey,
+      virtualAge: virtualAge ?? this.virtualAge,
+      realAge: realAge ?? this.realAge,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -659,6 +807,15 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     if (pinnedAt.present) {
       map['pinned_at'] = Variable<int>(pinnedAt.value);
     }
+    if (builtInKey.present) {
+      map['built_in_key'] = Variable<String>(builtInKey.value);
+    }
+    if (virtualAge.present) {
+      map['virtual_age'] = Variable<String>(virtualAge.value);
+    }
+    if (realAge.present) {
+      map['real_age'] = Variable<String>(realAge.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -679,6 +836,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('pinnedAt: $pinnedAt, ')
+          ..write('builtInKey: $builtInKey, ')
+          ..write('virtualAge: $virtualAge, ')
+          ..write('realAge: $realAge, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1863,6 +2023,27 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _totalPromptTokensMeta = const VerificationMeta(
+    'totalPromptTokens',
+  );
+  @override
+  late final GeneratedColumn<int> totalPromptTokens = GeneratedColumn<int>(
+    'total_prompt_tokens',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _totalCompletionTokensMeta =
+      const VerificationMeta('totalCompletionTokens');
+  @override
+  late final GeneratedColumn<int> totalCompletionTokens = GeneratedColumn<int>(
+    'total_completion_tokens',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1913,6 +2094,8 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     presencePenalty,
     frequencyPenalty,
     worldbookIdsJson,
+    totalPromptTokens,
+    totalCompletionTokens,
     createdAt,
     updatedAt,
     lastMessageAt,
@@ -2044,6 +2227,24 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         ),
       );
     }
+    if (data.containsKey('total_prompt_tokens')) {
+      context.handle(
+        _totalPromptTokensMeta,
+        totalPromptTokens.isAcceptableOrUnknown(
+          data['total_prompt_tokens']!,
+          _totalPromptTokensMeta,
+        ),
+      );
+    }
+    if (data.containsKey('total_completion_tokens')) {
+      context.handle(
+        _totalCompletionTokensMeta,
+        totalCompletionTokens.isAcceptableOrUnknown(
+          data['total_completion_tokens']!,
+          _totalCompletionTokensMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2140,6 +2341,14 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.string,
         data['${effectivePrefix}worldbook_ids_json'],
       ),
+      totalPromptTokens: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_prompt_tokens'],
+      ),
+      totalCompletionTokens: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_completion_tokens'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -2189,6 +2398,10 @@ class Session extends DataClass implements Insertable<Session> {
 
   /// 会话级世界书选择（JSON 数组）；null = 用角色绑定默认。
   final String? worldbookIdsJson;
+
+  /// 本会话累计消耗的 token（prompt/completion，逐轮累加）。
+  final int? totalPromptTokens;
+  final int? totalCompletionTokens;
   final int createdAt;
   final int updatedAt;
   final int lastMessageAt;
@@ -2208,6 +2421,8 @@ class Session extends DataClass implements Insertable<Session> {
     this.presencePenalty,
     this.frequencyPenalty,
     this.worldbookIdsJson,
+    this.totalPromptTokens,
+    this.totalCompletionTokens,
     required this.createdAt,
     required this.updatedAt,
     required this.lastMessageAt,
@@ -2254,6 +2469,12 @@ class Session extends DataClass implements Insertable<Session> {
     if (!nullToAbsent || worldbookIdsJson != null) {
       map['worldbook_ids_json'] = Variable<String>(worldbookIdsJson);
     }
+    if (!nullToAbsent || totalPromptTokens != null) {
+      map['total_prompt_tokens'] = Variable<int>(totalPromptTokens);
+    }
+    if (!nullToAbsent || totalCompletionTokens != null) {
+      map['total_completion_tokens'] = Variable<int>(totalCompletionTokens);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     map['last_message_at'] = Variable<int>(lastMessageAt);
@@ -2299,6 +2520,12 @@ class Session extends DataClass implements Insertable<Session> {
       worldbookIdsJson: worldbookIdsJson == null && nullToAbsent
           ? const Value.absent()
           : Value(worldbookIdsJson),
+      totalPromptTokens: totalPromptTokens == null && nullToAbsent
+          ? const Value.absent()
+          : Value(totalPromptTokens),
+      totalCompletionTokens: totalCompletionTokens == null && nullToAbsent
+          ? const Value.absent()
+          : Value(totalCompletionTokens),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       lastMessageAt: Value(lastMessageAt),
@@ -2328,6 +2555,10 @@ class Session extends DataClass implements Insertable<Session> {
       presencePenalty: serializer.fromJson<double?>(json['presencePenalty']),
       frequencyPenalty: serializer.fromJson<double?>(json['frequencyPenalty']),
       worldbookIdsJson: serializer.fromJson<String?>(json['worldbookIdsJson']),
+      totalPromptTokens: serializer.fromJson<int?>(json['totalPromptTokens']),
+      totalCompletionTokens: serializer.fromJson<int?>(
+        json['totalCompletionTokens'],
+      ),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       lastMessageAt: serializer.fromJson<int>(json['lastMessageAt']),
@@ -2352,6 +2583,8 @@ class Session extends DataClass implements Insertable<Session> {
       'presencePenalty': serializer.toJson<double?>(presencePenalty),
       'frequencyPenalty': serializer.toJson<double?>(frequencyPenalty),
       'worldbookIdsJson': serializer.toJson<String?>(worldbookIdsJson),
+      'totalPromptTokens': serializer.toJson<int?>(totalPromptTokens),
+      'totalCompletionTokens': serializer.toJson<int?>(totalCompletionTokens),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'lastMessageAt': serializer.toJson<int>(lastMessageAt),
@@ -2374,6 +2607,8 @@ class Session extends DataClass implements Insertable<Session> {
     Value<double?> presencePenalty = const Value.absent(),
     Value<double?> frequencyPenalty = const Value.absent(),
     Value<String?> worldbookIdsJson = const Value.absent(),
+    Value<int?> totalPromptTokens = const Value.absent(),
+    Value<int?> totalCompletionTokens = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     int? lastMessageAt,
@@ -2401,6 +2636,12 @@ class Session extends DataClass implements Insertable<Session> {
     worldbookIdsJson: worldbookIdsJson.present
         ? worldbookIdsJson.value
         : this.worldbookIdsJson,
+    totalPromptTokens: totalPromptTokens.present
+        ? totalPromptTokens.value
+        : this.totalPromptTokens,
+    totalCompletionTokens: totalCompletionTokens.present
+        ? totalCompletionTokens.value
+        : this.totalCompletionTokens,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -2440,6 +2681,12 @@ class Session extends DataClass implements Insertable<Session> {
       worldbookIdsJson: data.worldbookIdsJson.present
           ? data.worldbookIdsJson.value
           : this.worldbookIdsJson,
+      totalPromptTokens: data.totalPromptTokens.present
+          ? data.totalPromptTokens.value
+          : this.totalPromptTokens,
+      totalCompletionTokens: data.totalCompletionTokens.present
+          ? data.totalCompletionTokens.value
+          : this.totalCompletionTokens,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       lastMessageAt: data.lastMessageAt.present
@@ -2466,6 +2713,8 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('presencePenalty: $presencePenalty, ')
           ..write('frequencyPenalty: $frequencyPenalty, ')
           ..write('worldbookIdsJson: $worldbookIdsJson, ')
+          ..write('totalPromptTokens: $totalPromptTokens, ')
+          ..write('totalCompletionTokens: $totalCompletionTokens, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessageAt: $lastMessageAt')
@@ -2490,6 +2739,8 @@ class Session extends DataClass implements Insertable<Session> {
     presencePenalty,
     frequencyPenalty,
     worldbookIdsJson,
+    totalPromptTokens,
+    totalCompletionTokens,
     createdAt,
     updatedAt,
     lastMessageAt,
@@ -2513,6 +2764,8 @@ class Session extends DataClass implements Insertable<Session> {
           other.presencePenalty == this.presencePenalty &&
           other.frequencyPenalty == this.frequencyPenalty &&
           other.worldbookIdsJson == this.worldbookIdsJson &&
+          other.totalPromptTokens == this.totalPromptTokens &&
+          other.totalCompletionTokens == this.totalCompletionTokens &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.lastMessageAt == this.lastMessageAt);
@@ -2534,6 +2787,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<double?> presencePenalty;
   final Value<double?> frequencyPenalty;
   final Value<String?> worldbookIdsJson;
+  final Value<int?> totalPromptTokens;
+  final Value<int?> totalCompletionTokens;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> lastMessageAt;
@@ -2554,6 +2809,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.presencePenalty = const Value.absent(),
     this.frequencyPenalty = const Value.absent(),
     this.worldbookIdsJson = const Value.absent(),
+    this.totalPromptTokens = const Value.absent(),
+    this.totalCompletionTokens = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastMessageAt = const Value.absent(),
@@ -2575,6 +2832,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.presencePenalty = const Value.absent(),
     this.frequencyPenalty = const Value.absent(),
     this.worldbookIdsJson = const Value.absent(),
+    this.totalPromptTokens = const Value.absent(),
+    this.totalCompletionTokens = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     required int lastMessageAt,
@@ -2600,6 +2859,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<double>? presencePenalty,
     Expression<double>? frequencyPenalty,
     Expression<String>? worldbookIdsJson,
+    Expression<int>? totalPromptTokens,
+    Expression<int>? totalCompletionTokens,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? lastMessageAt,
@@ -2622,6 +2883,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       if (presencePenalty != null) 'presence_penalty': presencePenalty,
       if (frequencyPenalty != null) 'frequency_penalty': frequencyPenalty,
       if (worldbookIdsJson != null) 'worldbook_ids_json': worldbookIdsJson,
+      if (totalPromptTokens != null) 'total_prompt_tokens': totalPromptTokens,
+      if (totalCompletionTokens != null)
+        'total_completion_tokens': totalCompletionTokens,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastMessageAt != null) 'last_message_at': lastMessageAt,
@@ -2645,6 +2909,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Value<double?>? presencePenalty,
     Value<double?>? frequencyPenalty,
     Value<String?>? worldbookIdsJson,
+    Value<int?>? totalPromptTokens,
+    Value<int?>? totalCompletionTokens,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? lastMessageAt,
@@ -2666,6 +2932,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       presencePenalty: presencePenalty ?? this.presencePenalty,
       frequencyPenalty: frequencyPenalty ?? this.frequencyPenalty,
       worldbookIdsJson: worldbookIdsJson ?? this.worldbookIdsJson,
+      totalPromptTokens: totalPromptTokens ?? this.totalPromptTokens,
+      totalCompletionTokens:
+          totalCompletionTokens ?? this.totalCompletionTokens,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -2721,6 +2990,14 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (worldbookIdsJson.present) {
       map['worldbook_ids_json'] = Variable<String>(worldbookIdsJson.value);
     }
+    if (totalPromptTokens.present) {
+      map['total_prompt_tokens'] = Variable<int>(totalPromptTokens.value);
+    }
+    if (totalCompletionTokens.present) {
+      map['total_completion_tokens'] = Variable<int>(
+        totalCompletionTokens.value,
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -2754,6 +3031,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('presencePenalty: $presencePenalty, ')
           ..write('frequencyPenalty: $frequencyPenalty, ')
           ..write('worldbookIdsJson: $worldbookIdsJson, ')
+          ..write('totalPromptTokens: $totalPromptTokens, ')
+          ..write('totalCompletionTokens: $totalCompletionTokens, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessageAt: $lastMessageAt, ')
@@ -12873,6 +13152,9 @@ typedef $$CharactersTableCreateCompanionBuilder = CharactersCompanion Function({
   required int createdAt,
   required int updatedAt,
   Value<int?> pinnedAt,
+  Value<String?> builtInKey,
+  Value<String?> virtualAge,
+  Value<String?> realAge,
   Value<int> rowid,
 });
 typedef $$CharactersTableUpdateCompanionBuilder = CharactersCompanion Function({
@@ -12887,6 +13169,9 @@ typedef $$CharactersTableUpdateCompanionBuilder = CharactersCompanion Function({
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int?> pinnedAt,
+  Value<String?> builtInKey,
+  Value<String?> virtualAge,
+  Value<String?> realAge,
   Value<int> rowid,
 });
 
@@ -13105,6 +13390,21 @@ class $$CharactersTableFilterComposer
 
   ColumnFilters<int> get pinnedAt => $composableBuilder(
     column: $table.pinnedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get builtInKey => $composableBuilder(
+    column: $table.builtInKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get virtualAge => $composableBuilder(
+    column: $table.virtualAge,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get realAge => $composableBuilder(
+    column: $table.realAge,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13347,6 +13647,21 @@ class $$CharactersTableOrderingComposer
     column: $table.pinnedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get builtInKey => $composableBuilder(
+    column: $table.builtInKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get virtualAge => $composableBuilder(
+    column: $table.virtualAge,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get realAge => $composableBuilder(
+    column: $table.realAge,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CharactersTableAnnotationComposer
@@ -13400,6 +13715,19 @@ class $$CharactersTableAnnotationComposer
 
   GeneratedColumn<int> get pinnedAt =>
       $composableBuilder(column: $table.pinnedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get builtInKey => $composableBuilder(
+    column: $table.builtInKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get virtualAge => $composableBuilder(
+    column: $table.virtualAge,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get realAge =>
+      $composableBuilder(column: $table.realAge, builder: (column) => column);
 
   Expression<T> characterAdaptationsRefs<T extends Object>(
     Expression<T> Function($$CharacterAdaptationsTableAnnotationComposer a) f,
@@ -13629,6 +13957,9 @@ class $$CharactersTableTableManager
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int?> pinnedAt = const Value.absent(),
+                Value<String?> builtInKey = const Value.absent(),
+                Value<String?> virtualAge = const Value.absent(),
+                Value<String?> realAge = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CharactersCompanion(
                 id: id,
@@ -13642,6 +13973,9 @@ class $$CharactersTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 pinnedAt: pinnedAt,
+                builtInKey: builtInKey,
+                virtualAge: virtualAge,
+                realAge: realAge,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13657,6 +13991,9 @@ class $$CharactersTableTableManager
                 required int createdAt,
                 required int updatedAt,
                 Value<int?> pinnedAt = const Value.absent(),
+                Value<String?> builtInKey = const Value.absent(),
+                Value<String?> virtualAge = const Value.absent(),
+                Value<String?> realAge = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CharactersCompanion.insert(
                 id: id,
@@ -13670,6 +14007,9 @@ class $$CharactersTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 pinnedAt: pinnedAt,
+                builtInKey: builtInKey,
+                virtualAge: virtualAge,
+                realAge: realAge,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -14834,6 +15174,8 @@ typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
   Value<double?> presencePenalty,
   Value<double?> frequencyPenalty,
   Value<String?> worldbookIdsJson,
+  Value<int?> totalPromptTokens,
+  Value<int?> totalCompletionTokens,
   required int createdAt,
   required int updatedAt,
   required int lastMessageAt,
@@ -14855,6 +15197,8 @@ typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<double?> presencePenalty,
   Value<double?> frequencyPenalty,
   Value<String?> worldbookIdsJson,
+  Value<int?> totalPromptTokens,
+  Value<int?> totalCompletionTokens,
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int> lastMessageAt,
@@ -14996,6 +15340,16 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<String> get worldbookIdsJson => $composableBuilder(
     column: $table.worldbookIdsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalPromptTokens => $composableBuilder(
+    column: $table.totalPromptTokens,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalCompletionTokens => $composableBuilder(
+    column: $table.totalCompletionTokens,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15167,6 +15521,16 @@ class $$SessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get totalPromptTokens => $composableBuilder(
+    column: $table.totalPromptTokens,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalCompletionTokens => $composableBuilder(
+    column: $table.totalCompletionTokens,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -15270,6 +15634,16 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<String> get worldbookIdsJson => $composableBuilder(
     column: $table.worldbookIdsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalPromptTokens => $composableBuilder(
+    column: $table.totalPromptTokens,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalCompletionTokens => $composableBuilder(
+    column: $table.totalCompletionTokens,
     builder: (column) => column,
   );
 
@@ -15405,6 +15779,8 @@ class $$SessionsTableTableManager
                 Value<double?> presencePenalty = const Value.absent(),
                 Value<double?> frequencyPenalty = const Value.absent(),
                 Value<String?> worldbookIdsJson = const Value.absent(),
+                Value<int?> totalPromptTokens = const Value.absent(),
+                Value<int?> totalCompletionTokens = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> lastMessageAt = const Value.absent(),
@@ -15425,6 +15801,8 @@ class $$SessionsTableTableManager
                 presencePenalty: presencePenalty,
                 frequencyPenalty: frequencyPenalty,
                 worldbookIdsJson: worldbookIdsJson,
+                totalPromptTokens: totalPromptTokens,
+                totalCompletionTokens: totalCompletionTokens,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessageAt: lastMessageAt,
@@ -15447,6 +15825,8 @@ class $$SessionsTableTableManager
                 Value<double?> presencePenalty = const Value.absent(),
                 Value<double?> frequencyPenalty = const Value.absent(),
                 Value<String?> worldbookIdsJson = const Value.absent(),
+                Value<int?> totalPromptTokens = const Value.absent(),
+                Value<int?> totalCompletionTokens = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 required int lastMessageAt,
@@ -15467,6 +15847,8 @@ class $$SessionsTableTableManager
                 presencePenalty: presencePenalty,
                 frequencyPenalty: frequencyPenalty,
                 worldbookIdsJson: worldbookIdsJson,
+                totalPromptTokens: totalPromptTokens,
+                totalCompletionTokens: totalCompletionTokens,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessageAt: lastMessageAt,

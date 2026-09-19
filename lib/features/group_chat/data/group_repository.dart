@@ -65,15 +65,33 @@ class GroupRepository {
     final targetMembers = characterIds.toSet();
     final targetWorlds = worldIds.toSet();
     final targetBooks = worldbookIds.toSet();
+
+    // Load everything in three aggregate queries (not per-group) and compare
+    // in memory to avoid N+1 on group creation.
     final groups = await _db.watchGroups().first;
+    final allMembers = await _db.getAllGroupMembers();
+    final allWorlds = await _db.getAllGroupWorlds();
+    final allBooks = await _db.getAllGroupWorldbooks();
+
+    final membersByGroup = <String, Set<String>>{};
+    for (final m in allMembers) {
+      membersByGroup.putIfAbsent(m.groupId, () => <String>{}).add(m.characterId);
+    }
+    final worldsByGroup = <String, Set<String>>{};
+    for (final w in allWorlds) {
+      worldsByGroup.putIfAbsent(w.groupId, () => <String>{}).add(w.worldId);
+    }
+    final booksByGroup = <String, Set<String>>{};
+    for (final b in allBooks) {
+      booksByGroup.putIfAbsent(b.groupId, () => <String>{}).add(b.worldbookId);
+    }
+
     for (final g in groups) {
-      final members =
-          (await _db.getMembers(g.id)).map((m) => m.characterId).toSet();
-      if (!_setEquals(members, targetMembers)) continue;
-      final worlds = (await _db.getGroupWorldIds(g.id)).toSet();
-      if (!_setEquals(worlds, targetWorlds)) continue;
-      final books = (await _db.getGroupWorldbookIds(g.id)).toSet();
-      if (_setEquals(books, targetBooks)) return g.id;
+      if (!_setEquals(membersByGroup[g.id] ?? const {}, targetMembers)) {
+        continue;
+      }
+      if (!_setEquals(worldsByGroup[g.id] ?? const {}, targetWorlds)) continue;
+      if (_setEquals(booksByGroup[g.id] ?? const {}, targetBooks)) return g.id;
     }
     return null;
   }

@@ -15,9 +15,9 @@ const _members = [
 void main() {
   group('GroupSpeaker', () {
     test('turn mode round-robins by join order', () {
-      expect(GroupSpeaker.determine(mode: 'turn', members: _members, assistantCount: 0), 'c1');
-      expect(GroupSpeaker.determine(mode: 'turn', members: _members, assistantCount: 1), 'c2');
-      expect(GroupSpeaker.determine(mode: 'turn', members: _members, assistantCount: 3), 'c1');
+      expect(GroupSpeaker.determine(mode: 'turn', members: _members), 'c1');
+      expect(GroupSpeaker.determine(mode: 'turn', members: _members, lastSpeakerId: 'c1'), 'c2');
+      expect(GroupSpeaker.determine(mode: 'turn', members: _members, lastSpeakerId: 'c3'), 'c1');
     });
 
     test('call mode matches @name', () {
@@ -25,7 +25,6 @@ void main() {
         GroupSpeaker.determine(
           mode: 'call',
           members: _members,
-          assistantCount: 0,
           userText: '@小红 你怎么看',
         ),
         'c2',
@@ -34,13 +33,13 @@ void main() {
 
     test('call mode without mention returns null (falls back to auto)', () {
       expect(
-        GroupSpeaker.determine(mode: 'call', members: _members, assistantCount: 0, userText: '大家好'),
+        GroupSpeaker.determine(mode: 'call', members: _members, userText: '大家好'),
         isNull,
       );
     });
 
     test('auto mode returns null', () {
-      expect(GroupSpeaker.determine(mode: 'auto', members: _members, assistantCount: 0), isNull);
+      expect(GroupSpeaker.determine(mode: 'auto', members: _members), isNull);
     });
   });
 

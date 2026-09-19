@@ -1,8 +1,10 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/assistant/presentation/assistants_screen.dart';
 import '../../features/chat/presentation/chat_list_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
+import '../splash/splash_screen.dart';
 import '../../features/contacts/presentation/character_detail_screen.dart';
 import '../../features/contacts/presentation/character_edit_screen.dart';
 import '../../features/contacts/presentation/character_import_screen.dart';
@@ -15,6 +17,8 @@ import '../../features/profile/presentation/preset_settings_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/profile/presentation/provider_settings_screen.dart';
 import '../../features/search/presentation/search_screen.dart';
+import '../../features/spec/presentation/doc_screen.dart';
+import '../../features/spec/presentation/specs_screen.dart';
 import '../../features/story/presentation/story_create_screen.dart';
 import '../../features/story/presentation/story_edit_screen.dart';
 import '../../features/story/presentation/story_player_screen.dart';
@@ -25,8 +29,12 @@ import '../../features/worlds/presentation/worldbook_edit_screen.dart';
 import '../../features/worlds/presentation/worlds_screen.dart';
 
 final appRouter = GoRouter(
-  initialLocation: '/chat',
+  initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>
           HomeShell(navigationShell: navigationShell),
@@ -177,6 +185,27 @@ final appRouter = GoRouter(
               GoRoute(
                 path: 'presets',
                 builder: (context, state) => const PresetSettingsScreen(),
+              ),
+              GoRoute(
+                path: 'assistants',
+                builder: (context, state) => const AssistantsScreen(),
+              ),
+              GoRoute(
+                path: 'specs',
+                builder: (context, state) => const SpecsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':key',
+                    builder: (context, state) => DocScreen(
+                      key: ValueKey(state.pathParameters['key']),
+                      docKey: state.pathParameters['key']!,
+                    ),
+                  ),
+                ],
+              ),
+              GoRoute(
+                path: 'manual',
+                builder: (context, state) => const DocScreen(docKey: 'manual'),
               ),
             ],
           ),

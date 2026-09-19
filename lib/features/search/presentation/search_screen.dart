@@ -15,7 +15,7 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _query = '';
   List<Character> _characters = [];
-  List<Message> _messages = [];
+  List<({Message message, String characterName})> _messages = [];
   bool _loading = false;
 
   Future<void> _search(String q) async {
@@ -30,7 +30,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     setState(() => _loading = true);
     final db = ref.read(dbProvider);
     final characters = await db.searchCharacters(q.trim());
-    final messages = await db.searchMessages(q.trim());
+    final messages = await db.searchMessagesWithCharacter(q.trim());
     if (!mounted) return;
     setState(() {
       _characters = characters;
@@ -68,7 +68,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           ListTile(
                             leading: const Icon(Icons.person),
                             title: Text(c.name),
-                            onTap: () => context.push('/contacts/${c.id}'),
+                            onTap: () => context.go('/contacts/${c.id}'),
                           ),
                       ],
                       if (_messages.isNotEmpty) ...[
@@ -77,11 +77,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           ListTile(
                             leading: const Icon(Icons.chat_bubble_outline),
                             title: Text(
-                              m.content,
+                              m.message.content,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            onTap: () => context.push('/chat/${m.sessionId}'),
+                            subtitle: Text(m.characterName),
+                            onTap: () =>
+                                context.go('/chat/${m.message.sessionId}'),
                           ),
                       ],
                       if (_query.isNotEmpty &&

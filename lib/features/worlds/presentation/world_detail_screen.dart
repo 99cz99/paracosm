@@ -1,14 +1,11 @@
 import 'dart:convert';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database.dart';
-import '../../../core/providers/db_providers.dart';
-import '../../../core/utils/dialogs.dart';
 import '../data/world_exporter.dart';
 import 'worlds_providers.dart';
 
@@ -25,11 +22,6 @@ class WorldDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('世界详情'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.file_download_outlined),
-            tooltip: '导入世界',
-            onPressed: () => _importWorld(context, ref),
-          ),
           IconButton(
             icon: const Icon(Icons.ios_share),
             tooltip: '导出世界',
@@ -120,19 +112,4 @@ class WorldDetailScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _importWorld(BuildContext context, WidgetRef ref) async {
-    final files = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
-    if (files.isEmpty) return;
-    final bytes = await files.first.readAsBytes();
-    final companion = parseWorldJson(utf8.decode(bytes));
-    if (companion == null) {
-      if (context.mounted) await showErrorDialog(context, '不是有效的世界导出文件');
-      return;
-    }
-    await ref.read(dbProvider).insertWorld(companion);
-    if (context.mounted) await showSuccessDialog(context, '已导入');
-  }
 }

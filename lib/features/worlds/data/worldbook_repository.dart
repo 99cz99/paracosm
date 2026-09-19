@@ -36,6 +36,10 @@ class WorldbookRepository {
     return id;
   }
 
+  /// Imports a worldbook from pasted JSON text.
+  Future<String> importFromJson(String jsonText) =>
+      importFromBytes(utf8.encode(jsonText));
+
   WorldbookDraft _parse(List<int> bytes, String? filename) {
     final name = (filename ?? '').toLowerCase();
     final base = _baseName(filename);

@@ -50,6 +50,9 @@ class OpenAiCompatibleProvider implements LlmProvider {
       'model': model,
       'messages': messages,
       'stream': true,
+      // Ask OpenAI-compatible backends (DeepSeek/Kimi/GLM/SiliconFlow/OpenAI)
+      // to include the per-request token usage block in the final SSE chunk.
+      'stream_options': {'include_usage': true},
       'temperature': request.temperature,
       'top_p': request.topP,
       'max_tokens': request.maxTokens,

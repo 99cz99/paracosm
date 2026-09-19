@@ -166,7 +166,9 @@ Future<String> _summaryCommand(AppDatabase db, Session session) async {
   final memory =
       await db.getCharacterMemory(character.id, session.worldId ?? '');
   final summary = memory?.summaryText ?? '';
-  return '【摘要】\n${summary.isEmpty ? '暂无摘要' : summary}';
+  if (summary.isNotEmpty) return '【摘要】\n$summary';
+
+  return '【摘要】\n暂无摘要（对话还太短，继续聊几轮会自动生成）。';
 }
 
 /// Builds the /lore reply text: lists bound worldbook names, grouped by
@@ -430,11 +432,20 @@ Map<String, dynamic>? _readStateSchema(Character character) {
 /// Chinese labels for known state fields. Unknown fields show their key as-is.
 const _stateLabels = {
   'time': '时间',
+  'place': '地点',
   'location': '地点',
   'scene': '场景',
-  'facts': '已知事实',
+  'environment': '环境',
+  'char_outfit': '角色服装',
+  'char_body': '角色身体',
+  'nearby_items': '周围物品',
   'items': '物品',
   'npcs': '人物',
+  'facts': '已知事实',
+  'style': '文风',
+  'person': '人称',
+  'perspective': '视角',
+  'onomatopoeia': '拟声词',
 };
 
 /// Chinese labels for relation + affinity (skill growth) keys.
@@ -477,20 +488,35 @@ String _formatState(String stateStr, [Map<String, dynamic>? stateSchema]) {
     return _stateLabels[key] ?? key;
   }
 
+  const hoisted = {'time', 'location', 'place'};
   final blocks = <String>[];
   void addField(String key, dynamic value) {
     if (_isEmpty(value)) return;
     blocks.add(_formatValue(labelOf(key), value));
   }
 
-  addField('time', map['time']);
-  addField('location', map['location']);
+  for (final key in hoisted) {
+    addField(key, map[key]);
+  }
+  // Flatten `style` (person/perspective/onomatopoeia) into labelled lines.
+  final style = map['style'];
+  if (style is Map && style.isNotEmpty) {
+    style.forEach((k, v) => addField(k.toString(), v));
+  }
   for (final entry in map.entries) {
-    if (entry.key == 'time' || entry.key == 'location') continue;
+    if (hoisted.contains(entry.key) || entry.key == 'style') continue;
     addField(entry.key, entry.value);
   }
   return blocks.join('\n');
 }
+
+/// Public formatter for injecting a character's structured state into the
+/// chat prompt as readable labelled lines (empty when nothing meaningful).
+String formatStateForPrompt(String stateJson) => _formatState(stateJson);
+
+/// Public formatter for injecting the user↔character relation JSON.
+String formatRelationForPrompt(String relationJson) =>
+    _formatRelation(relationJson);
 
 /// Formats a plain relation JSON blob (non-skill) into labelled lines.
 String _formatRelation(String? relationStr) {

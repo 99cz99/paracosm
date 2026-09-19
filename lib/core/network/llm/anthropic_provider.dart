@@ -51,7 +51,15 @@ class AnthropicProvider implements LlmProvider {
       'temperature': request.temperature,
       'top_p': request.topP,
       if (request.systemPrompt != null && request.systemPrompt!.isNotEmpty)
-        'system': request.systemPrompt,
+        // Emit the system prompt as a single cached block so Anthropic's
+        // prompt caching can reuse it across turns (stable prefix → cache hit).
+        'system': [
+          {
+            'type': 'text',
+            'text': request.systemPrompt,
+            'cache_control': {'type': 'ephemeral'},
+          },
+        ],
       ...extraParams,
     };
 

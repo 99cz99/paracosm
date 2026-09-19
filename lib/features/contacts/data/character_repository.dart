@@ -137,6 +137,8 @@ class CharacterRepository {
     required Map<String, dynamic> core,
     List<String> tags = const [],
     String? avatarPath,
+    String? virtualAge,
+    String? realAge,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final id = _uuid.v4();
@@ -146,6 +148,8 @@ class CharacterRepository {
       corePersonaJson: jsonEncode(core),
       avatarPath: Value(avatarPath),
       tags: Value(jsonEncode(tags)),
+      virtualAge: Value(virtualAge),
+      realAge: Value(realAge),
       sourceType: 'manual',
       createdAt: now,
       updatedAt: now,

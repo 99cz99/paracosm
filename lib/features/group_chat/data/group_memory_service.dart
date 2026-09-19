@@ -81,7 +81,7 @@ class GroupMemoryService {
       provider,
       prompt,
       systemPrompt: '你是对话摘要器，输出简洁中文，不要任何标记。',
-      maxTokens: 512,
+      maxTokens: 2048,
       temperature: 0.3,
     );
     return text.trim();

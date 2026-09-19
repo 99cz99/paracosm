@@ -172,7 +172,11 @@ class GroupService {
     final pairNames =
         pairs.map((p) => '${_nameOf(members, p.$1)}|${_nameOf(members, p.$2)}').join('、');
     final existingJson = existing.isEmpty ? '{}' : jsonEncode(existing);
-    final transcript = history
+    const maxRecent = 20;
+    final recent = history.length <= maxRecent
+        ? history
+        : history.sublist(history.length - maxRecent);
+    final transcript = recent
         .map((m) => m.role == 'user'
             ? '用户：${m.content}'
             : '${_nameOf(members, m.speakerCharacterId)}：${m.content}')

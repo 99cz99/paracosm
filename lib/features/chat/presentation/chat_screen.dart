@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/commands/slash_commands.dart';
 import '../../../core/db/database.dart';
+import '../../../core/import/st_card_parser.dart';
 import '../../../core/network/llm/token_estimator.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
@@ -19,6 +20,10 @@ import '../data/session_repository.dart';
 import 'chat_controller.dart';
 import 'chat_providers.dart';
 import 'widgets/message_bubble.dart';
+import '../../assistant/data/importable_detector.dart';
+import '../../contacts/data/character_repository.dart';
+import '../../worlds/data/world_exporter.dart';
+import '../../worlds/data/worldbook_repository.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key, required this.sessionId});
@@ -78,7 +83,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  void _cancel() => ref.read(chatControllerProvider.notifier).cancel();
+  void _cancel() =>
+      ref.read(chatControllerProvider.notifier).cancel(widget.sessionId);
+
+  /// Imports a detected assistant-produced card/world/worldbook in one tap.
+  Future<void> _importAssistantResult(ImportableResult result) async {
+    if (!mounted) return;
+    final label = switch (result.kind) {
+      ImportableKind.character => '角色卡',
+      ImportableKind.world => '世界',
+      ImportableKind.worldbook => '世界书',
+    };
+    final ok = await showConfirmDialog(
+      context,
+      title: '导入$label',
+      message: '确定导入这段 $label 吗？',
+      confirmLabel: '导入',
+    );
+    if (!ok || !mounted) return;
+    try {
+      final db = ref.read(dbProvider);
+      switch (result.kind) {
+        case ImportableKind.character:
+          await CharacterRepository(db)
+              .importCharacter(StCardParser().parse(result.json));
+        case ImportableKind.world:
+          final companion = parseWorldJson(result.json);
+          if (companion == null) throw AppException('不是有效的世界 JSON');
+          await db.insertWorld(companion);
+        case ImportableKind.worldbook:
+          await WorldbookRepository(db).importFromJson(result.json);
+      }
+      if (mounted) await showSuccessDialog(context, '已导入');
+    } catch (e) {
+      if (mounted) {
+        await showErrorDialog(
+            context, e is AppException ? e.message : '导入失败：$e');
+      }
+    }
+  }
 
   // --- Slash-command popup ---
 
@@ -147,7 +190,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _chooseSlash(_slashIndex);
       return;
     }
-    if (ref.read(chatControllerProvider).isGenerating) return;
+    if (ref.read(chatControllerProvider).isGenerating(widget.sessionId)) return;
     _send();
   }
 
@@ -286,11 +329,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messagesAsync = ref.watch(messagesProvider(widget.sessionId));
     final character = ref.watch(chatCharacterProvider(widget.sessionId)).value;
     final characterId = character?.id;
+    final isAssistantChat = character?.builtInKey != null;
     final title = character?.name ?? '聊天';
     final hasAlternates = _hasAlternates(character);
     final showToken = ref.watch(tokenDisplayEnabledProvider).value ?? false;
     final tokenUsage = ref.watch(tokenUsageProvider(widget.sessionId)).value;
     final userInputTokens = estimateTokens(_inputController.text);
+    final sessionTokens = ref.watch(sessionTokensProvider(widget.sessionId)).value;
 
     final messages = messagesAsync.value ?? <Message>[];
     final hasUserReply =
@@ -298,10 +343,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final reversed = messages.reversed.toList();
     // Only show the streaming bubble for THIS session — a stream running in
     // another conversation must not leak into this one. Intentionally do NOT
-    // select `streamingText` here: it changes every delta and would rebuild
-    // the whole screen. The bubble widget below watches `streamingText` itself.
-    final showStreaming = ref.watch(chatControllerProvider.select(
-        (s) => s.isGenerating && s.streamingSessionId == widget.sessionId));
+    // select this session's text here: it changes every delta and would rebuild
+    // the whole screen. The bubble widget below watches the text itself.
+    final showStreaming = ref.watch(
+        chatControllerProvider.select((s) => s.isGenerating(widget.sessionId)));
 
     return Scaffold(
       appBar: AppBar(
@@ -334,7 +379,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ],
           if (showToken && tokenUsage != null)
-            _tokenChip(context, tokenUsage, userInputTokens),
+            _tokenChip(context, tokenUsage, userInputTokens, sessionTokens),
           PopupMenuButton<String>(
             tooltip: '更多',
             onSelected: (value) {
@@ -386,16 +431,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     );
                   }
                   final msg = reversed[showStreaming ? index - 1 : index];
-                  return MessageBubble(
-                    role: msg.role,
-                    content: msg.content,
-                    type: msg.type,
-                    avatarName: character?.name,
-                    avatarPath: character?.avatarPath,
-                    onAvatarTap: characterId == null
-                        ? null
-                        : () => context.push('/contacts/$characterId'),
-                    onRecall: () => _recall(msg),
+                  final importable = isAssistantChat && msg.role == 'assistant'
+                      ? detectImportable(msg.content)
+                      : null;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      MessageBubble(
+                        role: msg.role,
+                        content: msg.content,
+                        type: msg.type,
+                        avatarName: character?.name,
+                        avatarPath: character?.avatarPath,
+                        onAvatarTap: characterId == null
+                            ? null
+                            : () => context.push('/contacts/$characterId'),
+                        onRecall: () => _recall(msg),
+                      ),
+                      if (importable != null)
+                        _ImportButton(
+                          kind: importable.kind,
+                          onTap: () => _importAssistantResult(importable),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -408,7 +467,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _inputBar(BuildContext context) {
-    final isStreaming = ref.watch(chatControllerProvider).isGenerating;
+    final isStreaming = ref.watch(chatControllerProvider
+        .select((s) => s.isGenerating(widget.sessionId)));
 
     return SafeArea(
       child: Column(
@@ -492,6 +552,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     BuildContext context,
     TokenUsage usage,
     int userInputTokens,
+    ({int promptTokens, int completionTokens})? sessionTokens,
   ) {
     final total = usage.totalWith(userInputTokens);
     final available = usage.available;
@@ -511,7 +572,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       padding: const EdgeInsets.only(right: 8),
       child: Center(
         child: InkWell(
-          onTap: () => _showTokenDetail(context, usage, userInputTokens),
+          onTap: () =>
+              _showTokenDetail(context, usage, userInputTokens, sessionTokens),
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -537,13 +599,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     BuildContext context,
     TokenUsage usage,
     int userInputTokens,
+    ({int promptTokens, int completionTokens})? sessionTokens,
   ) {
     showModalBottomSheet(
       context: context,
       useRootNavigator: false,
       isScrollControlled: true,
-      builder: (_) =>
-          _TokenDetailSheet(usage: usage, userInputTokens: userInputTokens),
+      builder: (_) => _TokenDetailSheet(
+        usage: usage,
+        userInputTokens: userInputTokens,
+        sessionTokens: sessionTokens,
+      ),
     );
   }
 }
@@ -554,10 +620,15 @@ String _formatK(int tokens) {
 }
 
 class _TokenDetailSheet extends StatelessWidget {
-  const _TokenDetailSheet({required this.usage, required this.userInputTokens});
+  const _TokenDetailSheet({
+    required this.usage,
+    required this.userInputTokens,
+    this.sessionTokens,
+  });
 
   final TokenUsage usage;
   final int userInputTokens;
+  final ({int promptTokens, int completionTokens})? sessionTokens;
 
   @override
   Widget build(BuildContext context) {
@@ -599,6 +670,23 @@ class _TokenDetailSheet extends StatelessWidget {
               row('输出预留', usage.outputReserve),
               row('模型上限', usage.contextLimit),
               row('剩余', remaining),
+              if (sessionTokens != null) ...[
+                const Divider(height: 20),
+                Text('本会话累计消耗',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                if (sessionTokens!.promptTokens +
+                        sessionTokens!.completionTokens ==
+                    0)
+                  Text('暂无（当前 provider 未回传 token 用量）',
+                      style: TextStyle(color: scheme.onSurfaceVariant))
+                else ...[
+                  row('Prompt', sessionTokens!.promptTokens),
+                  row('Completion', sessionTokens!.completionTokens),
+                  row('合计',
+                      sessionTokens!.promptTokens + sessionTokens!.completionTokens),
+                ],
+              ],
             ],
           ),
         ),
@@ -790,8 +878,8 @@ class _SessionSettingsDialogState extends State<_SessionSettingsDialog> {
   }
 }
 
-/// The in-progress assistant bubble. Watches `streamingText` itself so each
-/// delta only rebuilds this small widget, not the whole chat screen.
+/// The in-progress assistant bubble. Watches this session's streaming text
+/// itself so each delta only rebuilds this small widget, not the whole screen.
 class _StreamingBubble extends ConsumerWidget {
   const _StreamingBubble({
     required this.sessionId,
@@ -807,8 +895,9 @@ class _StreamingBubble extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final streamingText =
-        ref.watch(chatControllerProvider.select((s) => s.streamingText)) ?? '';
+    final streamingText = ref.watch(chatControllerProvider
+            .select((s) => s.streams[sessionId]?.text)) ??
+        '';
     // Hide once the reply has been persisted (streamingText equals the last
     // message), so it doesn't double up on the persisted message for a frame.
     final messages =
@@ -824,6 +913,30 @@ class _StreamingBubble extends ConsumerWidget {
       avatarName: avatarName,
       avatarPath: avatarPath,
       onAvatarTap: onAvatarTap,
+    );
+  }
+}
+
+/// A one-tap import button shown under an assistant message whose content is an
+/// importable card / world / worldbook.
+class _ImportButton extends StatelessWidget {
+  const _ImportButton({required this.kind, required this.onTap});
+
+  final ImportableKind kind;
+  final VoidCallback onTap;
+
+  String get _label => switch (kind) {
+        ImportableKind.character => '导入角色卡',
+        ImportableKind.world => '导入世界',
+        ImportableKind.worldbook => '导入世界书',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.download_outlined, size: 18),
+      label: Text(_label),
     );
   }
 }
