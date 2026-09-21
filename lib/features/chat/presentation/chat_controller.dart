@@ -234,7 +234,11 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       } catch (_) {
         // Session deleted mid-stream — nothing to persist.
       } finally {
-        _clearStream(sessionId);
+        // Keep the reply text in the streaming slot (mark it done) until the
+        // DB watch delivers the persisted message — otherwise the bubble
+        // flashes empty for a frame after streaming ends.
+        _setStream(sessionId,
+            text: stream.buffer.toString(), isGenerating: false);
       }
     } finally {
       _streams.remove(sessionId);
@@ -552,15 +556,15 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
   }
 
   Future<void> _runMemoryUpdate(AppDatabase db, String sessionId) async {
-    final session = await db.getSession(sessionId);
-    if (session == null) return;
-    final config = await resolveProvider(
-      db,
-      ref.read(secureKeyStoreProvider),
-      providerId: session.providerId,
-    );
-    if (config == null) return;
     try {
+      final session = await db.getSession(sessionId);
+      if (session == null) return;
+      final config = await resolveProvider(
+        db,
+        ref.read(secureKeyStoreProvider),
+        providerId: session.providerId,
+      );
+      if (config == null) return;
       await MemoryService(db).updateAfterTurn(
         sessionId,
         MemoryService.buildProvider(config),

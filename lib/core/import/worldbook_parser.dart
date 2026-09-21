@@ -47,5 +47,10 @@ class WorldbookParser {
         'selective': e['selective'] ?? false,
         'priority': e['priority'],
         'comment': e['comment']?.toString() ?? '',
+        // Preserved metadata so non-standard / complex cards don't lose detail.
+        'group': e['group']?.toString(),
+        'probability': e['probability'],
+        'exclude_recursion': e['exclude_recursion'] ?? false,
+        'match_whole_words': e['match_whole_words'] ?? false,
       };
 }

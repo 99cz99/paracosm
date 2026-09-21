@@ -163,11 +163,14 @@ void main() {
         }),
       );
       final provider = _FixedJsonProvider(jsonEncode({
-        'trust_value': 50,
-        'trust_level': 2,
-        'corruption_value': 5,
-        'corruption_level': 1,
-        'total_h_scenes_completed': 1,
+        'state': {'scene': '测试场景'},
+        'affinity': {
+          'trust_value': 50,
+          'trust_level': 2,
+          'corruption_value': 5,
+          'corruption_level': 1,
+          'total_h_scenes_completed': 1,
+        },
       }));
 
       await MemoryService(db).updateAfterTurn('s1', provider);
@@ -189,10 +192,13 @@ void main() {
         core: jsonEncode({'description': 'd'}),
       );
       final provider = _FixedJsonProvider(jsonEncode({
-        'affection': 50,
-        'trust': 40,
-        'intimacy': 30,
-        'notes': 'ok',
+        'state': {'scene': '测试场景'},
+        'relation': {
+          'affection': 50,
+          'trust': 40,
+          'intimacy': 30,
+          'notes': 'ok',
+        },
       }));
 
       await MemoryService(db).updateAfterTurn('s1', provider);

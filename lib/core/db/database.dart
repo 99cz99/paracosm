@@ -198,6 +198,14 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
             await m.addColumn(characters, characters.virtualAge);
             await m.addColumn(characters, characters.realAge);
           }
+          if (from < 18) {
+            // Group auto-speak rules (regex / delay / probability).
+            await m.addColumn(groups, groups.autoSpeakJson);
+          }
+          if (from < 19) {
+            // Character image gallery (expressions/backgrounds, JSON manifest).
+            await m.addColumn(characters, characters.imageGalleryJson);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');

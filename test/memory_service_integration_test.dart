@@ -18,9 +18,9 @@ class _FakeMemoryProvider implements LlmProvider {
     final prompt = request.messages.last.content;
     final String reply;
     if (prompt.contains('状态 JSON')) {
-      reply = '{"scene":"图书馆","facts":["已聊多轮"],"items":["书签"]}';
-    } else if (prompt.contains('关系 JSON')) {
-      reply = '{"affection":50,"trust":40,"intimacy":30,"notes":"关系升温"}';
+      // Merged extraction prompt: one call returns both state and relation.
+      reply = '{"state":{"scene":"图书馆","facts":["已聊多轮"],"items":["书签"]},'
+          '"relation":{"affection":50,"trust":40,"intimacy":30,"notes":"关系升温"}}';
     } else {
       reply = '摘要：在图书馆聊天，关系逐渐升温。';
     }

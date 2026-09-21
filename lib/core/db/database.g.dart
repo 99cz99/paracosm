@@ -158,6 +158,17 @@ class $CharactersTable extends Characters
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _imageGalleryJsonMeta = const VerificationMeta(
+    'imageGalleryJson',
+  );
+  @override
+  late final GeneratedColumn<String> imageGalleryJson = GeneratedColumn<String>(
+    'image_gallery_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -174,6 +185,7 @@ class $CharactersTable extends Characters
     builtInKey,
     virtualAge,
     realAge,
+    imageGalleryJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -289,6 +301,15 @@ class $CharactersTable extends Characters
         realAge.isAcceptableOrUnknown(data['real_age']!, _realAgeMeta),
       );
     }
+    if (data.containsKey('image_gallery_json')) {
+      context.handle(
+        _imageGalleryJsonMeta,
+        imageGalleryJson.isAcceptableOrUnknown(
+          data['image_gallery_json']!,
+          _imageGalleryJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -354,6 +375,10 @@ class $CharactersTable extends Characters
         DriftSqlType.string,
         data['${effectivePrefix}real_age'],
       ),
+      imageGalleryJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_gallery_json'],
+      ),
     );
   }
 
@@ -394,6 +419,9 @@ class Character extends DataClass implements Insertable<Character> {
 
   /// 真实年龄（设定内实际年龄，自由文本，用于声明成年）。
   final String? realAge;
+
+  /// 角色图库（JSON 数组 `[{name, path}]`，情绪图/背景图，聊天里按名字命中发图）。
+  final String? imageGalleryJson;
   const Character({
     required this.id,
     required this.name,
@@ -409,6 +437,7 @@ class Character extends DataClass implements Insertable<Character> {
     this.builtInKey,
     this.virtualAge,
     this.realAge,
+    this.imageGalleryJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -440,6 +469,9 @@ class Character extends DataClass implements Insertable<Character> {
     }
     if (!nullToAbsent || realAge != null) {
       map['real_age'] = Variable<String>(realAge);
+    }
+    if (!nullToAbsent || imageGalleryJson != null) {
+      map['image_gallery_json'] = Variable<String>(imageGalleryJson);
     }
     return map;
   }
@@ -474,6 +506,9 @@ class Character extends DataClass implements Insertable<Character> {
       realAge: realAge == null && nullToAbsent
           ? const Value.absent()
           : Value(realAge),
+      imageGalleryJson: imageGalleryJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imageGalleryJson),
     );
   }
 
@@ -497,6 +532,7 @@ class Character extends DataClass implements Insertable<Character> {
       builtInKey: serializer.fromJson<String?>(json['builtInKey']),
       virtualAge: serializer.fromJson<String?>(json['virtualAge']),
       realAge: serializer.fromJson<String?>(json['realAge']),
+      imageGalleryJson: serializer.fromJson<String?>(json['imageGalleryJson']),
     );
   }
   @override
@@ -517,6 +553,7 @@ class Character extends DataClass implements Insertable<Character> {
       'builtInKey': serializer.toJson<String?>(builtInKey),
       'virtualAge': serializer.toJson<String?>(virtualAge),
       'realAge': serializer.toJson<String?>(realAge),
+      'imageGalleryJson': serializer.toJson<String?>(imageGalleryJson),
     };
   }
 
@@ -535,6 +572,7 @@ class Character extends DataClass implements Insertable<Character> {
     Value<String?> builtInKey = const Value.absent(),
     Value<String?> virtualAge = const Value.absent(),
     Value<String?> realAge = const Value.absent(),
+    Value<String?> imageGalleryJson = const Value.absent(),
   }) => Character(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -552,6 +590,9 @@ class Character extends DataClass implements Insertable<Character> {
     builtInKey: builtInKey.present ? builtInKey.value : this.builtInKey,
     virtualAge: virtualAge.present ? virtualAge.value : this.virtualAge,
     realAge: realAge.present ? realAge.value : this.realAge,
+    imageGalleryJson: imageGalleryJson.present
+        ? imageGalleryJson.value
+        : this.imageGalleryJson,
   );
   Character copyWithCompanion(CharactersCompanion data) {
     return Character(
@@ -583,6 +624,9 @@ class Character extends DataClass implements Insertable<Character> {
           ? data.virtualAge.value
           : this.virtualAge,
       realAge: data.realAge.present ? data.realAge.value : this.realAge,
+      imageGalleryJson: data.imageGalleryJson.present
+          ? data.imageGalleryJson.value
+          : this.imageGalleryJson,
     );
   }
 
@@ -602,7 +646,8 @@ class Character extends DataClass implements Insertable<Character> {
           ..write('pinnedAt: $pinnedAt, ')
           ..write('builtInKey: $builtInKey, ')
           ..write('virtualAge: $virtualAge, ')
-          ..write('realAge: $realAge')
+          ..write('realAge: $realAge, ')
+          ..write('imageGalleryJson: $imageGalleryJson')
           ..write(')'))
         .toString();
   }
@@ -623,6 +668,7 @@ class Character extends DataClass implements Insertable<Character> {
     builtInKey,
     virtualAge,
     realAge,
+    imageGalleryJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -641,7 +687,8 @@ class Character extends DataClass implements Insertable<Character> {
           other.pinnedAt == this.pinnedAt &&
           other.builtInKey == this.builtInKey &&
           other.virtualAge == this.virtualAge &&
-          other.realAge == this.realAge);
+          other.realAge == this.realAge &&
+          other.imageGalleryJson == this.imageGalleryJson);
 }
 
 class CharactersCompanion extends UpdateCompanion<Character> {
@@ -659,6 +706,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
   final Value<String?> builtInKey;
   final Value<String?> virtualAge;
   final Value<String?> realAge;
+  final Value<String?> imageGalleryJson;
   final Value<int> rowid;
   const CharactersCompanion({
     this.id = const Value.absent(),
@@ -675,6 +723,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     this.builtInKey = const Value.absent(),
     this.virtualAge = const Value.absent(),
     this.realAge = const Value.absent(),
+    this.imageGalleryJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CharactersCompanion.insert({
@@ -692,6 +741,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     this.builtInKey = const Value.absent(),
     this.virtualAge = const Value.absent(),
     this.realAge = const Value.absent(),
+    this.imageGalleryJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -714,6 +764,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     Expression<String>? builtInKey,
     Expression<String>? virtualAge,
     Expression<String>? realAge,
+    Expression<String>? imageGalleryJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -731,6 +782,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
       if (builtInKey != null) 'built_in_key': builtInKey,
       if (virtualAge != null) 'virtual_age': virtualAge,
       if (realAge != null) 'real_age': realAge,
+      if (imageGalleryJson != null) 'image_gallery_json': imageGalleryJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -750,6 +802,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     Value<String?>? builtInKey,
     Value<String?>? virtualAge,
     Value<String?>? realAge,
+    Value<String?>? imageGalleryJson,
     Value<int>? rowid,
   }) {
     return CharactersCompanion(
@@ -767,6 +820,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
       builtInKey: builtInKey ?? this.builtInKey,
       virtualAge: virtualAge ?? this.virtualAge,
       realAge: realAge ?? this.realAge,
+      imageGalleryJson: imageGalleryJson ?? this.imageGalleryJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -816,6 +870,9 @@ class CharactersCompanion extends UpdateCompanion<Character> {
     if (realAge.present) {
       map['real_age'] = Variable<String>(realAge.value);
     }
+    if (imageGalleryJson.present) {
+      map['image_gallery_json'] = Variable<String>(imageGalleryJson.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -839,6 +896,7 @@ class CharactersCompanion extends UpdateCompanion<Character> {
           ..write('builtInKey: $builtInKey, ')
           ..write('virtualAge: $virtualAge, ')
           ..write('realAge: $realAge, ')
+          ..write('imageGalleryJson: $imageGalleryJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6656,6 +6714,17 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _autoSpeakJsonMeta = const VerificationMeta(
+    'autoSpeakJson',
+  );
+  @override
+  late final GeneratedColumn<String> autoSpeakJson = GeneratedColumn<String>(
+    'auto_speak_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _providerIdMeta = const VerificationMeta(
     'providerId',
   );
@@ -6761,6 +6830,7 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
     avatarPath,
     speakMode,
     memoryEnabled,
+    autoSpeakJson,
     providerId,
     temperature,
     topP,
@@ -6820,6 +6890,15 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
         memoryEnabled.isAcceptableOrUnknown(
           data['memory_enabled']!,
           _memoryEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('auto_speak_json')) {
+      context.handle(
+        _autoSpeakJsonMeta,
+        autoSpeakJson.isAcceptableOrUnknown(
+          data['auto_speak_json']!,
+          _autoSpeakJsonMeta,
         ),
       );
     }
@@ -6928,6 +7007,10 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
         DriftSqlType.bool,
         data['${effectivePrefix}memory_enabled'],
       )!,
+      autoSpeakJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}auto_speak_json'],
+      ),
       providerId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}provider_id'],
@@ -6985,6 +7068,9 @@ class Group extends DataClass implements Insertable<Group> {
   /// 是否把每个角色的记忆（关系/状态/摘要/成长）代入群聊 system prompt。
   final bool memoryEnabled;
 
+  /// 自动发言规则（JSON 数组）：{id, pattern(正则), characterId, delay, probability, enabled}。
+  final String? autoSpeakJson;
+
   /// 群级采样参数 + Provider（null = 用默认）。[providerId] 指向 [ProviderConfigs].id。
   final String? providerId;
   final double? temperature;
@@ -7002,6 +7088,7 @@ class Group extends DataClass implements Insertable<Group> {
     this.avatarPath,
     required this.speakMode,
     required this.memoryEnabled,
+    this.autoSpeakJson,
     this.providerId,
     this.temperature,
     this.topP,
@@ -7025,6 +7112,9 @@ class Group extends DataClass implements Insertable<Group> {
     }
     map['speak_mode'] = Variable<String>(speakMode);
     map['memory_enabled'] = Variable<bool>(memoryEnabled);
+    if (!nullToAbsent || autoSpeakJson != null) {
+      map['auto_speak_json'] = Variable<String>(autoSpeakJson);
+    }
     if (!nullToAbsent || providerId != null) {
       map['provider_id'] = Variable<String>(providerId);
     }
@@ -7061,6 +7151,9 @@ class Group extends DataClass implements Insertable<Group> {
           : Value(avatarPath),
       speakMode: Value(speakMode),
       memoryEnabled: Value(memoryEnabled),
+      autoSpeakJson: autoSpeakJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(autoSpeakJson),
       providerId: providerId == null && nullToAbsent
           ? const Value.absent()
           : Value(providerId),
@@ -7095,6 +7188,7 @@ class Group extends DataClass implements Insertable<Group> {
       avatarPath: serializer.fromJson<String?>(json['avatarPath']),
       speakMode: serializer.fromJson<String>(json['speakMode']),
       memoryEnabled: serializer.fromJson<bool>(json['memoryEnabled']),
+      autoSpeakJson: serializer.fromJson<String?>(json['autoSpeakJson']),
       providerId: serializer.fromJson<String?>(json['providerId']),
       temperature: serializer.fromJson<double?>(json['temperature']),
       topP: serializer.fromJson<double?>(json['topP']),
@@ -7116,6 +7210,7 @@ class Group extends DataClass implements Insertable<Group> {
       'avatarPath': serializer.toJson<String?>(avatarPath),
       'speakMode': serializer.toJson<String>(speakMode),
       'memoryEnabled': serializer.toJson<bool>(memoryEnabled),
+      'autoSpeakJson': serializer.toJson<String?>(autoSpeakJson),
       'providerId': serializer.toJson<String?>(providerId),
       'temperature': serializer.toJson<double?>(temperature),
       'topP': serializer.toJson<double?>(topP),
@@ -7135,6 +7230,7 @@ class Group extends DataClass implements Insertable<Group> {
     Value<String?> avatarPath = const Value.absent(),
     String? speakMode,
     bool? memoryEnabled,
+    Value<String?> autoSpeakJson = const Value.absent(),
     Value<String?> providerId = const Value.absent(),
     Value<double?> temperature = const Value.absent(),
     Value<double?> topP = const Value.absent(),
@@ -7151,6 +7247,9 @@ class Group extends DataClass implements Insertable<Group> {
     avatarPath: avatarPath.present ? avatarPath.value : this.avatarPath,
     speakMode: speakMode ?? this.speakMode,
     memoryEnabled: memoryEnabled ?? this.memoryEnabled,
+    autoSpeakJson: autoSpeakJson.present
+        ? autoSpeakJson.value
+        : this.autoSpeakJson,
     providerId: providerId.present ? providerId.value : this.providerId,
     temperature: temperature.present ? temperature.value : this.temperature,
     topP: topP.present ? topP.value : this.topP,
@@ -7177,6 +7276,9 @@ class Group extends DataClass implements Insertable<Group> {
       memoryEnabled: data.memoryEnabled.present
           ? data.memoryEnabled.value
           : this.memoryEnabled,
+      autoSpeakJson: data.autoSpeakJson.present
+          ? data.autoSpeakJson.value
+          : this.autoSpeakJson,
       providerId: data.providerId.present
           ? data.providerId.value
           : this.providerId,
@@ -7208,6 +7310,7 @@ class Group extends DataClass implements Insertable<Group> {
           ..write('avatarPath: $avatarPath, ')
           ..write('speakMode: $speakMode, ')
           ..write('memoryEnabled: $memoryEnabled, ')
+          ..write('autoSpeakJson: $autoSpeakJson, ')
           ..write('providerId: $providerId, ')
           ..write('temperature: $temperature, ')
           ..write('topP: $topP, ')
@@ -7229,6 +7332,7 @@ class Group extends DataClass implements Insertable<Group> {
     avatarPath,
     speakMode,
     memoryEnabled,
+    autoSpeakJson,
     providerId,
     temperature,
     topP,
@@ -7249,6 +7353,7 @@ class Group extends DataClass implements Insertable<Group> {
           other.avatarPath == this.avatarPath &&
           other.speakMode == this.speakMode &&
           other.memoryEnabled == this.memoryEnabled &&
+          other.autoSpeakJson == this.autoSpeakJson &&
           other.providerId == this.providerId &&
           other.temperature == this.temperature &&
           other.topP == this.topP &&
@@ -7267,6 +7372,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
   final Value<String?> avatarPath;
   final Value<String> speakMode;
   final Value<bool> memoryEnabled;
+  final Value<String?> autoSpeakJson;
   final Value<String?> providerId;
   final Value<double?> temperature;
   final Value<double?> topP;
@@ -7284,6 +7390,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     this.avatarPath = const Value.absent(),
     this.speakMode = const Value.absent(),
     this.memoryEnabled = const Value.absent(),
+    this.autoSpeakJson = const Value.absent(),
     this.providerId = const Value.absent(),
     this.temperature = const Value.absent(),
     this.topP = const Value.absent(),
@@ -7302,6 +7409,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     this.avatarPath = const Value.absent(),
     this.speakMode = const Value.absent(),
     this.memoryEnabled = const Value.absent(),
+    this.autoSpeakJson = const Value.absent(),
     this.providerId = const Value.absent(),
     this.temperature = const Value.absent(),
     this.topP = const Value.absent(),
@@ -7324,6 +7432,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     Expression<String>? avatarPath,
     Expression<String>? speakMode,
     Expression<bool>? memoryEnabled,
+    Expression<String>? autoSpeakJson,
     Expression<String>? providerId,
     Expression<double>? temperature,
     Expression<double>? topP,
@@ -7342,6 +7451,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
       if (avatarPath != null) 'avatar_path': avatarPath,
       if (speakMode != null) 'speak_mode': speakMode,
       if (memoryEnabled != null) 'memory_enabled': memoryEnabled,
+      if (autoSpeakJson != null) 'auto_speak_json': autoSpeakJson,
       if (providerId != null) 'provider_id': providerId,
       if (temperature != null) 'temperature': temperature,
       if (topP != null) 'top_p': topP,
@@ -7362,6 +7472,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     Value<String?>? avatarPath,
     Value<String>? speakMode,
     Value<bool>? memoryEnabled,
+    Value<String?>? autoSpeakJson,
     Value<String?>? providerId,
     Value<double?>? temperature,
     Value<double?>? topP,
@@ -7380,6 +7491,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
       avatarPath: avatarPath ?? this.avatarPath,
       speakMode: speakMode ?? this.speakMode,
       memoryEnabled: memoryEnabled ?? this.memoryEnabled,
+      autoSpeakJson: autoSpeakJson ?? this.autoSpeakJson,
       providerId: providerId ?? this.providerId,
       temperature: temperature ?? this.temperature,
       topP: topP ?? this.topP,
@@ -7413,6 +7525,9 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     }
     if (memoryEnabled.present) {
       map['memory_enabled'] = Variable<bool>(memoryEnabled.value);
+    }
+    if (autoSpeakJson.present) {
+      map['auto_speak_json'] = Variable<String>(autoSpeakJson.value);
     }
     if (providerId.present) {
       map['provider_id'] = Variable<String>(providerId.value);
@@ -7456,6 +7571,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
           ..write('avatarPath: $avatarPath, ')
           ..write('speakMode: $speakMode, ')
           ..write('memoryEnabled: $memoryEnabled, ')
+          ..write('autoSpeakJson: $autoSpeakJson, ')
           ..write('providerId: $providerId, ')
           ..write('temperature: $temperature, ')
           ..write('topP: $topP, ')
@@ -13155,6 +13271,7 @@ typedef $$CharactersTableCreateCompanionBuilder = CharactersCompanion Function({
   Value<String?> builtInKey,
   Value<String?> virtualAge,
   Value<String?> realAge,
+  Value<String?> imageGalleryJson,
   Value<int> rowid,
 });
 typedef $$CharactersTableUpdateCompanionBuilder = CharactersCompanion Function({
@@ -13172,6 +13289,7 @@ typedef $$CharactersTableUpdateCompanionBuilder = CharactersCompanion Function({
   Value<String?> builtInKey,
   Value<String?> virtualAge,
   Value<String?> realAge,
+  Value<String?> imageGalleryJson,
   Value<int> rowid,
 });
 
@@ -13405,6 +13523,11 @@ class $$CharactersTableFilterComposer
 
   ColumnFilters<String> get realAge => $composableBuilder(
     column: $table.realAge,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imageGalleryJson => $composableBuilder(
+    column: $table.imageGalleryJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13662,6 +13785,11 @@ class $$CharactersTableOrderingComposer
     column: $table.realAge,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get imageGalleryJson => $composableBuilder(
+    column: $table.imageGalleryJson,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CharactersTableAnnotationComposer
@@ -13728,6 +13856,11 @@ class $$CharactersTableAnnotationComposer
 
   GeneratedColumn<String> get realAge =>
       $composableBuilder(column: $table.realAge, builder: (column) => column);
+
+  GeneratedColumn<String> get imageGalleryJson => $composableBuilder(
+    column: $table.imageGalleryJson,
+    builder: (column) => column,
+  );
 
   Expression<T> characterAdaptationsRefs<T extends Object>(
     Expression<T> Function($$CharacterAdaptationsTableAnnotationComposer a) f,
@@ -13960,6 +14093,7 @@ class $$CharactersTableTableManager
                 Value<String?> builtInKey = const Value.absent(),
                 Value<String?> virtualAge = const Value.absent(),
                 Value<String?> realAge = const Value.absent(),
+                Value<String?> imageGalleryJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CharactersCompanion(
                 id: id,
@@ -13976,6 +14110,7 @@ class $$CharactersTableTableManager
                 builtInKey: builtInKey,
                 virtualAge: virtualAge,
                 realAge: realAge,
+                imageGalleryJson: imageGalleryJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13994,6 +14129,7 @@ class $$CharactersTableTableManager
                 Value<String?> builtInKey = const Value.absent(),
                 Value<String?> virtualAge = const Value.absent(),
                 Value<String?> realAge = const Value.absent(),
+                Value<String?> imageGalleryJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CharactersCompanion.insert(
                 id: id,
@@ -14010,6 +14146,7 @@ class $$CharactersTableTableManager
                 builtInKey: builtInKey,
                 virtualAge: virtualAge,
                 realAge: realAge,
+                imageGalleryJson: imageGalleryJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18451,6 +18588,7 @@ typedef $$GroupsTableCreateCompanionBuilder = GroupsCompanion Function({
   Value<String?> avatarPath,
   Value<String> speakMode,
   Value<bool> memoryEnabled,
+  Value<String?> autoSpeakJson,
   Value<String?> providerId,
   Value<double?> temperature,
   Value<double?> topP,
@@ -18469,6 +18607,7 @@ typedef $$GroupsTableUpdateCompanionBuilder = GroupsCompanion Function({
   Value<String?> avatarPath,
   Value<String> speakMode,
   Value<bool> memoryEnabled,
+  Value<String?> autoSpeakJson,
   Value<String?> providerId,
   Value<double?> temperature,
   Value<double?> topP,
@@ -18632,6 +18771,11 @@ class $$GroupsTableFilterComposer
 
   ColumnFilters<bool> get memoryEnabled => $composableBuilder(
     column: $table.memoryEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get autoSpeakJson => $composableBuilder(
+    column: $table.autoSpeakJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18870,6 +19014,11 @@ class $$GroupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get autoSpeakJson => $composableBuilder(
+    column: $table.autoSpeakJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get providerId => $composableBuilder(
     column: $table.providerId,
     builder: (column) => ColumnOrderings(column),
@@ -18944,6 +19093,11 @@ class $$GroupsTableAnnotationComposer
 
   GeneratedColumn<bool> get memoryEnabled => $composableBuilder(
     column: $table.memoryEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get autoSpeakJson => $composableBuilder(
+    column: $table.autoSpeakJson,
     builder: (column) => column,
   );
 
@@ -19176,6 +19330,7 @@ class $$GroupsTableTableManager
                 Value<String?> avatarPath = const Value.absent(),
                 Value<String> speakMode = const Value.absent(),
                 Value<bool> memoryEnabled = const Value.absent(),
+                Value<String?> autoSpeakJson = const Value.absent(),
                 Value<String?> providerId = const Value.absent(),
                 Value<double?> temperature = const Value.absent(),
                 Value<double?> topP = const Value.absent(),
@@ -19193,6 +19348,7 @@ class $$GroupsTableTableManager
                 avatarPath: avatarPath,
                 speakMode: speakMode,
                 memoryEnabled: memoryEnabled,
+                autoSpeakJson: autoSpeakJson,
                 providerId: providerId,
                 temperature: temperature,
                 topP: topP,
@@ -19212,6 +19368,7 @@ class $$GroupsTableTableManager
                 Value<String?> avatarPath = const Value.absent(),
                 Value<String> speakMode = const Value.absent(),
                 Value<bool> memoryEnabled = const Value.absent(),
+                Value<String?> autoSpeakJson = const Value.absent(),
                 Value<String?> providerId = const Value.absent(),
                 Value<double?> temperature = const Value.absent(),
                 Value<double?> topP = const Value.absent(),
@@ -19229,6 +19386,7 @@ class $$GroupsTableTableManager
                 avatarPath: avatarPath,
                 speakMode: speakMode,
                 memoryEnabled: memoryEnabled,
+                autoSpeakJson: autoSpeakJson,
                 providerId: providerId,
                 temperature: temperature,
                 topP: topP,

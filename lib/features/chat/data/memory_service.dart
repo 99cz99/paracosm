@@ -28,9 +28,6 @@ class MemoryService {
   /// Scan this many recent messages for worldbook keywords.
   static const int worldbookScanMessages = 6;
 
-  /// How many recent messages the skill-growth reflection sees.
-  static const int growthReflectWindow = 12;
-
   /// How many recent messages the state/relation extraction sees each turn.
   static const int stateExtractWindow = 6;
 
@@ -58,19 +55,18 @@ class MemoryService {
     final character = await _db.getCharacter(session.characterId);
     if (character == null) return;
 
-    final messages = await _db.getMessages(sessionId);
+    // Only AI-visible conversation feeds memory; slash commands + their replies
+    // (visibleToAi=false) must not pollute the summary/state/relation.
+    final messages = (await _db.getMessages(sessionId))
+        .where((m) => m.visibleToAi)
+        .toList();
     if (messages.isEmpty) return;
 
     final worldId = session.worldId ?? '';
-    await _maybeSummarize(character.id, worldId, sessionId, provider, messages);
-    await _extractState(character.id, worldId, provider, messages);
-    if (hasSkillGrowth(character)) {
-      // The skill manages its own growth axes — reflect them back instead of
-      // the generic user↔character relation, which would conflict.
-      await _reflectSkillGrowth(character, worldId, provider, messages);
-    } else {
-      await _extractRelation(character.id, worldId, provider, messages);
-    }
+    final ageContext = _ageContext(character);
+    await _maybeSummarize(
+        character.id, worldId, sessionId, provider, messages, ageContext);
+    await _extractMemory(character, worldId, provider, messages, ageContext);
 
     await provider.cancel();
   }
@@ -134,6 +130,7 @@ class MemoryService {
     String sessionId,
     LlmProvider provider,
     List<Message> messages,
+    String ageContext,
   ) async {
     final state = await _db.getSessionState(sessionId);
     final summaryIndex = state?.summaryIndex ?? 0;
@@ -148,15 +145,18 @@ class MemoryService {
     if (toSummarize.isEmpty) return;
 
     final memory = await _db.getCharacterMemory(characterId, worldId);
-    final existing = memory?.summaryText ?? '';
+    var existing = memory?.summaryText ?? '';
+    // A previously-stored safety-filter refusal isn't a real summary — start
+    // fresh instead of merging new content into the refusal text.
+    if (_looksLikeRefusal(existing)) existing = '';
     final transcript =
         toSummarize.map((m) => '${m.role}: ${m.content}').join('\n');
-    var summary = await _summarize(provider, existing, transcript);
+    var summary = await _summarize(provider, existing, transcript, ageContext);
     if (summary.isEmpty) {
       // Reasoning models can burn their token budget and return nothing —
       // retry once. If still empty, leave the cursor alone so those messages
       // are not silently dropped into a void (they'll be retried next turn).
-      summary = await _summarize(provider, existing, transcript);
+      summary = await _summarize(provider, existing, transcript, ageContext);
     }
     if (summary.isEmpty) return;
 
@@ -179,127 +179,158 @@ class MemoryService {
     LlmProvider provider,
     String existing,
     String transcript,
+    String ageContext,
   ) async {
     final prompt = existing.isEmpty
         ? '把以下对话压缩成简短摘要（保留关键事件、未完成的事、地点与时间线索、人物状态与关系变化、重要物件）：\n\n$transcript\n\n摘要：'
         : '已有摘要：\n$existing\n\n新增对话：\n$transcript\n\n'
             '把两者合并成一份更完整但仍简短的摘要（控制在 300 字内，保留关键事件、未完成的事、地点/时间、人物关系变化）：';
+    final systemPrompt = '你是对话摘要器，输出简洁中文，不要任何标记。'
+        '${ageContext.isEmpty ? '' : '\n$ageContext'}';
     final text = await _complete(
       provider,
       prompt,
-      systemPrompt: '你是对话摘要器，输出简洁中文，不要任何标记。',
+      systemPrompt: systemPrompt,
       maxTokens: 2048,
       temperature: 0.3,
     );
-    return text.trim();
+    final summary = text.trim();
+    // A safety-filter refusal isn't a summary — treat it as empty so the
+    // caller keeps the previous summary instead of storing the refusal text.
+    if (_looksLikeRefusal(summary)) return '';
+    return summary;
   }
 
-  Future<void> _extractState(
-    String characterId,
-    String worldId,
-    LlmProvider provider,
-    List<Message> messages,
-  ) async {
-    final transcript = _recentTranscript(messages);
-    if (transcript.isEmpty) return;
-    final memory = await _db.getCharacterMemory(characterId, worldId);
-    final currentState = memory?.stateJson ?? '{}';
-    final newState = await _extractJson(
-      provider,
-      _statePrompt(currentState, transcript),
-      fallback: currentState,
-    );
-    await _db.upsertCharacterMemory(CharacterMemoriesCompanion.insert(
-      characterId: characterId,
-      worldId: Value(worldId),
-      stateJson: Value(newState),
-      updatedAt: DateTime.now().millisecondsSinceEpoch,
-    ));
+  /// Heuristic for a model safety-filter refusal (e.g. "抱歉，我无法处理…").
+  bool _looksLikeRefusal(String text) {
+    if (text.isEmpty) return false;
+    const markers = [
+      '无法处理',
+      '涉及未成年',
+      '不能提供',
+      '不能生成',
+      '抱歉，我无法',
+      '我不能',
+    ];
+    return markers.any(text.contains);
   }
 
-  Future<void> _extractRelation(
-    String characterId,
-    String worldId,
-    LlmProvider provider,
-    List<Message> messages,
-  ) async {
-    final transcript = _recentTranscript(messages);
-    if (transcript.isEmpty) return;
-    final relation = await _db.getCharacterRelation(characterId, worldId);
-    final currentRelation = relation?.relationJson ?? '{}';
-    final newRelation = await _extractJson(
-      provider,
-      _relationPrompt(currentRelation, transcript),
-      fallback: currentRelation,
-    );
-    await _db.upsertCharacterRelation(CharacterRelationsCompanion.insert(
-      characterId: characterId,
-      worldId: Value(worldId),
-      relationJson: Value(newRelation),
-      updatedAt: DateTime.now().millisecondsSinceEpoch,
-    ));
-  }
-
-  /// Reflects a skill character's own growth axes back into `core['affinity']`
-  /// so trust/corruption accumulate across sessions. The skill's rules live in
-  /// `core['system_prompt']`, so they are passed to the reflection model as
-  /// context (this is the heavier of the memory calls; it replaces the generic
-  /// relation extraction for growth-bearing skills).
-  Future<void> _reflectSkillGrowth(
+  /// Extracts structured state + relation (or skill growth) in ONE LLM call,
+  /// so per-turn memory work is a single call instead of two. Best-effort:
+  /// on any failure we keep the current values.
+  Future<void> _extractMemory(
     Character character,
     String worldId,
     LlmProvider provider,
     List<Message> messages,
+    String ageContext,
   ) async {
-    Map<String, dynamic> core;
-    try {
-      core = jsonDecode(character.corePersonaJson) as Map<String, dynamic>;
-    } catch (_) {
-      return;
+    final transcript = _recentTranscript(messages);
+    if (transcript.isEmpty) return;
+
+    final skill = hasSkillGrowth(character);
+    final memory = await _db.getCharacterMemory(character.id, worldId);
+    final currentState = memory?.stateJson ?? '{}';
+
+    final String prompt;
+    Map<String, dynamic>? currentAffinity;
+    String? currentRelation;
+    if (skill) {
+      final seed = _affinitySeed(character);
+      if (seed == null) return;
+      currentAffinity = await _currentAffinity(character.id, worldId, seed);
+      prompt = _combinedPrompt(
+        currentState,
+        relation: null,
+        affinity: jsonEncode(currentAffinity),
+        transcript: transcript,
+      );
+    } else {
+      final relation = await _db.getCharacterRelation(character.id, worldId);
+      currentRelation = relation?.relationJson ?? '{}';
+      prompt = _combinedPrompt(
+        currentState,
+        relation: currentRelation,
+        affinity: null,
+        transcript: transcript,
+      );
     }
-    final seedRaw = core['affinity'];
-    if (seedRaw is! Map || seedRaw.isEmpty) return;
-    final seed = Map<String, dynamic>.from(seedRaw);
 
-    // Per-world current state, seeded from the character's original affinity.
-    final current = await _currentAffinity(character.id, worldId, seed);
-
-    final recent = messages.length <= growthReflectWindow
-        ? messages
-        : messages.sublist(messages.length - growthReflectWindow);
-    final transcript = recent.map((m) => '${m.role}: ${m.content}').join('\n');
-
-    // NOTE: do not feed the whole `core['system_prompt']` here — skill system
-    // prompts can be tens of KB, which blows the memory model's context and
-    // makes it return non-JSON. The fixed rule below + the conversation is
-    // enough for a best-effort three-axis update.
-    final prompt = '当前成长状态 JSON：\n${jsonEncode(current)}\n\n'
-        '最近对话：\n$transcript\n\n'
-        '根据角色的成长机制更新成长状态 JSON（trust_value / trust_level / '
-        'corruption_value / corruption_level / total_h_scenes_completed / '
-        'corruption_milestones）。信任值随互动升降，堕落度只升不降。'
-        '只输出更新后的 JSON，不要解释、不要代码块。';
+    // Reasoning models can burn their token budget on thinking and return an
+    // empty `content`, so budget plenty of headroom.
     final text = await _complete(
       provider,
       prompt,
-      systemPrompt:
-          '你是状态记录器。根据当前成长状态和最近对话，输出更新后的成长状态 JSON。只输出 JSON。',
-      maxTokens: 256,
-      temperature: 0.2,
+      systemPrompt: '你是结构化信息提取器。只输出 JSON，不要解释、不要代码块。'
+          '${ageContext.isEmpty ? '' : '\n$ageContext'}',
+      maxTokens: 16384,
     );
     final raw = _parseJsonObject(text);
     if (raw == null) return;
-    final Map<String, dynamic> updated;
+    final Map<String, dynamic> parsed;
     try {
-      updated = jsonDecode(raw) as Map<String, dynamic>;
+      parsed = jsonDecode(raw) as Map<String, dynamic>;
     } catch (_) {
       return;
     }
-    await _writeBackAffinity(
-      character.id,
-      worldId,
-      sanitizeAffinity(current, updated),
-    );
+
+    final state = parsed['state'];
+    if (state is Map && state.isNotEmpty) {
+      await _db.upsertCharacterMemory(CharacterMemoriesCompanion.insert(
+        characterId: character.id,
+        worldId: Value(worldId),
+        stateJson: Value(jsonEncode(state)),
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      ));
+    }
+
+    if (skill) {
+      final affinity = parsed['affinity'];
+      if (affinity is Map && affinity.isNotEmpty && currentAffinity != null) {
+        await _writeBackAffinity(
+          character.id,
+          worldId,
+          sanitizeAffinity(currentAffinity, Map<String, dynamic>.from(affinity)),
+        );
+      }
+    } else {
+      final relation = parsed['relation'];
+      if (relation is Map && relation.isNotEmpty) {
+        await _db.upsertCharacterRelation(CharacterRelationsCompanion.insert(
+          characterId: character.id,
+          worldId: Value(worldId),
+          relationJson: Value(jsonEncode(relation)),
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+        ));
+      }
+    }
+  }
+
+  Map<String, dynamic>? _affinitySeed(Character character) {
+    try {
+      final core = jsonDecode(character.corePersonaJson) as Map<String, dynamic>;
+      final seed = core['affinity'];
+      return seed is Map && seed.isNotEmpty
+          ? Map<String, dynamic>.from(seed)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Short age context injected into memory prompts so the memory model sees
+  /// the same age information the chat prompt carries (avoids false-flagging
+  /// adult roleplay as involving minors). Empty when no age is declared.
+  String _ageContext(Character character) {
+    final realAge = character.realAge?.trim() ?? '';
+    final virtualAge = character.virtualAge?.trim() ?? '';
+    if (realAge.isEmpty && virtualAge.isEmpty) return '';
+    final parts = <String>[
+      if (realAge.isNotEmpty) '角色设定实际年龄为 $realAge',
+      if (virtualAge.isNotEmpty) '角色对外年龄为 $virtualAge',
+      if (realAge.isNotEmpty) '对话中出现的其他角色（NPC）同样为成年设定',
+    ];
+    return '背景：${parts.join('，')}。';
   }
 
   Future<Map<String, dynamic>> _currentAffinity(
@@ -335,7 +366,8 @@ class MemoryService {
   /// keeps key facts from slipping away between summary runs.
   String _recentTranscript(List<Message> messages) {
     final visible = messages
-        .where((m) => m.role == 'user' || m.role == 'assistant')
+        .where((m) =>
+            (m.role == 'user' || m.role == 'assistant') && m.visibleToAi)
         .toList();
     final recent = visible.length <= stateExtractWindow
         ? visible
@@ -343,41 +375,44 @@ class MemoryService {
     return recent.map((m) => '${m.role}: ${m.content}').join('\n');
   }
 
-  String _statePrompt(String state, String transcript) {
-    final seed = state == '{}'
+  /// One prompt that asks the model to update both state and relation (or
+  /// skill growth) at once, returning a single `{state, relation|affinity}`
+  /// object.
+  String _combinedPrompt(
+    String state, {
+    required String? relation,
+    required String? affinity,
+    required String transcript,
+  }) {
+    final stateSeed = state == '{}'
         ? '{"time":"","place":"","scene":"","environment":"","char_outfit":"","char_body":"","nearby_items":[],"npcs":{},"style":{"person":"","perspective":"","onomatopoeia":""},"facts":[]}'
         : state;
-    return '当前状态 JSON：\n$seed\n\n最近对话：\n$transcript\n\n'
-        '根据对话更新状态 JSON（保持结构，只改变化的部分），覆盖维度：'
-        'time 时间、place 地点、scene 场景、environment 环境、'
+    final buffer = StringBuffer('当前状态 JSON：\n$stateSeed\n\n');
+    if (affinity != null) {
+      buffer.writeln('当前成长状态 JSON：\n$affinity\n\n');
+      buffer.writeln('最近对话：\n$transcript\n\n');
+      buffer.writeln(
+        '根据对话同时更新状态和成长值，输出一个 JSON 对象：'
+        '{"state": {...}, "affinity": {...}}。'
+        '状态维度：time 时间、place 地点、scene 场景、environment 环境、'
         'char_outfit 角色服装、char_body 角色身体、nearby_items 周围物品、'
-        'npcs 在场人物、style.person 人称、style.perspective 视角、'
-        'style.onomatopoeia 拟声词风格、facts 已确认事实。只输出 JSON。';
-  }
-
-  String _relationPrompt(String relation, String transcript) {
-    final seed = relation == '{}'
-        ? '{"affection":0,"trust":0,"intimacy":0,"notes":""}'
-        : relation;
-    return '当前关系 JSON：\n$seed\n\n最近对话：\n$transcript\n\n'
-        '根据对话更新关系 JSON（好感/信任/亲密度 0-100，notes 简述），只输出 JSON。';
-  }
-
-  Future<String> _extractJson(
-    LlmProvider provider,
-    String prompt, {
-    required String fallback,
-  }) async {
-    try {
-      final text = await _complete(
-        provider,
-        prompt,
-        systemPrompt: '你是结构化信息提取器。只输出 JSON，不要解释、不要代码块。',
+        'npcs 在场人物、style 文风、facts 已确认事实。'
+        '成长值：trust_value/trust_level 随互动升降、corruption_value/corruption_level 只升不降、'
+        'total_h_scenes_completed、corruption_milestones。只输出 JSON。',
       );
-      return _parseJsonObject(text) ?? fallback;
-    } catch (_) {
-      return fallback;
+    } else {
+      buffer.writeln('当前关系 JSON：\n$relation\n\n');
+      buffer.writeln('最近对话：\n$transcript\n\n');
+      buffer.writeln(
+        '根据对话同时更新状态和关系，输出一个 JSON 对象：'
+        '{"state": {...}, "relation": {...}}。'
+        '状态维度：time 时间、place 地点、scene 场景、environment 环境、'
+        'char_outfit 角色服装、char_body 角色身体、nearby_items 周围物品、'
+        'npcs 在场人物、style 文风、facts 已确认事实。'
+        '关系：affection 好感、trust 信任、intimacy 亲密度（0-100）、notes 简述。只输出 JSON。',
+      );
     }
+    return buffer.toString();
   }
 
   Future<String> _complete(

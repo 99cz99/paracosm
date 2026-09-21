@@ -77,7 +77,10 @@ class StoryService {
       ...recentForBook.map((n) => n.narrative),
     ].join('\n');
     final worldbookSection = worldCtx.buildWorldbookSection(worldbookContext);
-    if (worldbookSection.isNotEmpty) parts.add(worldbookSection);
+    if (worldbookSection.isNotEmpty) {
+      parts.add(applyPlaceholders(
+          worldbookSection, character?.name ?? '', userName));
+    }
     if (path.isEmpty) {
       parts.add('请生成开场剧情（叙述 + 2-3 个选项）。');
     } else {

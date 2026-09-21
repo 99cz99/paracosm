@@ -62,7 +62,8 @@ class GroupService {
       group,
       members,
       worldCtx.buildWorldSection(),
-      worldCtx.buildWorldbookSection(recentContext),
+      applyPlaceholders(
+          worldCtx.buildWorldbookSection(recentContext), '', userName),
       pairs,
       forcedName,
       groupMemory,
@@ -237,7 +238,7 @@ class GroupService {
     await for (final chunk in provider.streamChat(ChatRequest(
       messages: [ChatMessage(role: 'user', content: prompt)],
       systemPrompt: '你是结构化信息提取器。只输出 JSON，不要解释、不要代码块。',
-      maxTokens: 1024,
+      maxTokens: 16384,
       temperature: 0.2,
     ))) {
       if (chunk.textDelta != null) buffer.write(chunk.textDelta);

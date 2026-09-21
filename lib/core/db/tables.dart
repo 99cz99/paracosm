@@ -36,6 +36,9 @@ class Characters extends Table {
   /// 真实年龄（设定内实际年龄，自由文本，用于声明成年）。
   TextColumn get realAge => text().nullable()();
 
+  /// 角色图库（JSON 数组 `[{name, path}]`，情绪图/背景图，聊天里按名字命中发图）。
+  TextColumn get imageGalleryJson => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -266,6 +269,9 @@ class Groups extends Table {
 
   /// 是否把每个角色的记忆（关系/状态/摘要/成长）代入群聊 system prompt。
   BoolColumn get memoryEnabled => boolean().withDefault(const Constant(true))();
+
+  /// 自动发言规则（JSON 数组）：{id, pattern(正则), characterId, delay, probability, enabled}。
+  TextColumn get autoSpeakJson => text().nullable()();
 
   /// 群级采样参数 + Provider（null = 用默认）。[providerId] 指向 [ProviderConfigs].id。
   TextColumn get providerId => text().nullable()();

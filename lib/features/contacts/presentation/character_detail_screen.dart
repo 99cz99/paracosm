@@ -16,6 +16,7 @@ import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/dialogs.dart';
 import '../../../core/utils/multi_select_sheet.dart';
+import '../../../core/world/world_context.dart';
 import '../../chat/data/session_repository.dart';
 import '../data/character_repository.dart';
 import 'contacts_providers.dart';
@@ -444,15 +445,10 @@ class CharacterDetailScreen extends ConsumerWidget {
               child: Text('未绑定世界书'),
             ),
           for (final b in books)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.menu_book),
-              title: Text(b.name),
-              trailing: IconButton(
-                icon: const Icon(Icons.link_off),
-                tooltip: '解绑世界书',
-                onPressed: () => _unbindWorldbook(context, ref, b),
-              ),
+            _BoundWorldbookTile(
+              book: b,
+              onEdit: () => context.push('/worlds/worldbooks/${b.id}/edit'),
+              onUnbind: () => _unbindWorldbook(context, ref, b),
             ),
           TextButton.icon(
             onPressed: () => _bindWorldbook(context, ref),
@@ -764,25 +760,22 @@ class CharacterDetailScreen extends ConsumerWidget {
 
     final entries = worldbook['entries'];
     if (entries is List && entries.isNotEmpty) {
-      final children = <Widget>[];
+      final entryWidgets = <Widget>[];
       for (final e in entries) {
         if (e is! Map) continue;
         final content = (e['content'] ?? '').toString();
         if (content.trim().isEmpty) continue;
-        final comment = (e['comment'] ?? '').toString().trim();
-        final keys = e['keys'] is List ? (e['keys'] as List).join(' / ') : '';
-        final title = comment.isNotEmpty
-            ? comment
-            : (keys.isNotEmpty ? keys : '条目');
-        children.add(ExpandableSection(
-          title: title,
-          text: content,
-        ));
+        entryWidgets.add(_WorldbookEntry(entry: Map<String, dynamic>.from(e)));
       }
-      if (children.isNotEmpty) {
+      if (entryWidgets.isNotEmpty) {
         widgets.add(ExpansionTile(
-          title: Text('世界书（${children.length}）'),
-          children: children,
+          title: Text('世界书（${entryWidgets.length}）'),
+          children: [
+            ...entryWidgets,
+            _WorldbookTestTrigger(
+              books: [(name: '内置世界书', bookJson: c.worldbookJson)],
+            ),
+          ],
         ));
       }
     }
@@ -1000,4 +993,187 @@ class _StartChoice {
   const _StartChoice(this.worldId);
 
   final String? worldId;
+}
+
+/// A single worldbook entry: title (comment/keys) + keyword chips + collapsible
+/// content. Shared by the built-in and bound worldbook lists.
+class _WorldbookEntry extends StatelessWidget {
+  const _WorldbookEntry({required this.entry});
+
+  final Map<String, dynamic> entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final content = (entry['content'] ?? '').toString();
+    final comment = (entry['comment'] ?? '').toString().trim();
+    final keys = entry['keys'] is List
+        ? (entry['keys'] as List)
+            .map((k) => k.toString().trim())
+            .where((k) => k.isNotEmpty)
+            .toList()
+        : <String>[];
+    final title = comment.isNotEmpty ? comment : '条目';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        if (keys.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '关键词：${keys.join('、')}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ExpandableSection(title: '', text: content),
+      ],
+    );
+  }
+}
+
+/// Bound worldbook tile: expandable entries + keywords + a "测试触发" preview,
+/// plus edit/unbind actions in the header.
+class _BoundWorldbookTile extends StatelessWidget {
+  const _BoundWorldbookTile({
+    required this.book,
+    required this.onEdit,
+    required this.onUnbind,
+  });
+
+  final Worldbook book;
+  final VoidCallback onEdit;
+  final VoidCallback onUnbind;
+
+  List<Widget> _entries() {
+    Map<String, dynamic>? map;
+    try {
+      map = jsonDecode(book.bookJson) as Map<String, dynamic>;
+    } catch (_) {
+      map = null;
+    }
+    final entries = map?['entries'];
+    if (entries is! List) return const [];
+    final widgets = <Widget>[];
+    for (final e in entries) {
+      if (e is! Map) continue;
+      final content = (e['content'] ?? '').toString();
+      if (content.trim().isEmpty) continue;
+      widgets.add(_WorldbookEntry(entry: Map<String, dynamic>.from(e)));
+    }
+    return widgets;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entryWidgets = _entries();
+    return ExpansionTile(
+      title: Row(
+        children: [
+          Expanded(child: Text(book.name)),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: '编辑世界书',
+            onPressed: onEdit,
+          ),
+          IconButton(
+            icon: const Icon(Icons.link_off),
+            tooltip: '解绑世界书',
+            onPressed: onUnbind,
+          ),
+        ],
+      ),
+      children: [
+        if (entryWidgets.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('无条目'),
+          ),
+        ...entryWidgets,
+        _WorldbookTestTrigger(
+          books: [(name: book.name, bookJson: book.bookJson)],
+        ),
+      ],
+    );
+  }
+}
+
+/// Inline "测试触发" input that lists which entries of the given books match.
+class _WorldbookTestTrigger extends StatefulWidget {
+  const _WorldbookTestTrigger({required this.books});
+
+  final List<({String name, String? bookJson})> books;
+
+  @override
+  State<_WorldbookTestTrigger> createState() => _WorldbookTestTriggerState();
+}
+
+class _WorldbookTestTriggerState extends State<_WorldbookTestTrigger> {
+  final _controller = TextEditingController();
+  String _result = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _test() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    final hits = <String>[];
+    for (final b in widget.books) {
+      if (b.bookJson == null) continue;
+      for (final e in WorldbookMatcher.matchedEntries(b.bookJson, text)) {
+        final comment = (e['comment'] ?? '').toString().trim();
+        final keys = e['keys'] is List
+            ? (e['keys'] as List).map((k) => k.toString()).join(' / ')
+            : '';
+        final label = comment.isNotEmpty
+            ? comment
+            : (keys.isNotEmpty ? keys : '条目');
+        hits.add(widget.books.length > 1 ? '【${b.name}】$label' : label);
+      }
+    }
+    setState(() {
+      _result = hits.isEmpty ? '未命中任何条目' : '命中：\n${hits.join('\n')}';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: '测试触发',
+                  hintText: '输入文字，命中关键词的条目会列出',
+                ),
+                onSubmitted: (_) => _test(),
+              ),
+            ),
+            TextButton(onPressed: _test, child: const Text('测试')),
+          ],
+        ),
+        if (_result.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              _result,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+      ],
+    );
+  }
 }

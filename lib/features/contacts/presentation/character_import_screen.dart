@@ -9,6 +9,7 @@ import '../../../core/providers/db_providers.dart';
 import '../../../core/utils/app_exception.dart';
 import '../../../core/utils/dialogs.dart';
 import '../data/character_repository.dart';
+import 'contacts_providers.dart';
 
 class CharacterImportScreen extends ConsumerStatefulWidget {
   const CharacterImportScreen({super.key});
@@ -36,11 +37,14 @@ class _CharacterImportScreenState extends ConsumerState<CharacterImportScreen> {
     for (final file in files) {
       try {
         final bytes = await file.readAsBytes();
-        await repo.importFromBytes(
+        final id = await repo.importFromBytes(
           bytes,
           sourcePath: file.path ?? file.name,
           filename: file.name,
         );
+        // Re-importing an existing character overwrites it in place; invalidate
+        // the detail page's cached FutureProvider so it shows the new worldbook.
+        ref.invalidate(characterProvider(id));
         ok++;
       } catch (e) {
         failures.add('${file.name}：${e is AppException ? e.message : e}');
@@ -93,8 +97,9 @@ class _CharacterImportScreenState extends ConsumerState<CharacterImportScreen> {
 
     setState(() => _importing = true);
     try {
-      await CharacterRepository(ref.read(dbProvider))
+      final id = await CharacterRepository(ref.read(dbProvider))
           .importFromBytes(utf8.encode(text));
+      ref.invalidate(characterProvider(id));
       if (!mounted) return;
       await showSuccessDialog(context, '导入成功');
       if (mounted) context.pop();

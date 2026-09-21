@@ -52,8 +52,12 @@ class CharacterRepository {
       if (imported != null) return imported;
       throw AppException('Markdown 中未找到角色前置元数据（name 等）');
     }
-    final jsonStr = PngCardExtractor().extract(bytes) ?? utf8.decode(bytes);
-    return StCardParser().parse(jsonStr);
+    final extracted = PngCardExtractor().extract(bytes);
+    if (extracted != null) {
+      // PNG card: the PNG itself is the portrait.
+      return StCardParser().parse(extracted).withAvatar(bytes);
+    }
+    return StCardParser().parse(utf8.decode(bytes));
   }
 
   Future<String> importCharacter(
@@ -72,10 +76,27 @@ class CharacterRepository {
     if (imported.stateSchema != null && imported.stateSchema!.isNotEmpty) {
       core['state_schema'] = imported.stateSchema;
     }
+    if (imported.regexScripts.isNotEmpty) {
+      core['regex_scripts'] = imported.regexScripts;
+    }
 
     // Re-importing a same-named character overwrites it in place (keeping its
     // id so sessions/memory/avatar/pin survive) instead of duplicating it.
     final existing = await _db.getCharacterByName(imported.name);
+    final id = existing?.id ?? _uuid.v4();
+
+    // Save the portrait as the avatar (best-effort).
+    String? avatarPath;
+    if (imported.avatarBytes != null) {
+      try {
+        avatarPath = await saveAvatar(imported.avatarBytes!,
+            oldPath: existing?.avatarPath);
+      } catch (_) {}
+    }
+
+    // Save the gallery images and build the manifest (best-effort).
+    final galleryJson = await _saveGallery(imported.gallery, characterId: id);
+
     if (existing != null) {
       await _db.updateCharacter(
         existing.id,
@@ -88,6 +109,12 @@ class CharacterRepository {
           tags: Value(jsonEncode(imported.tags)),
           sourceType: Value(sourceType),
           sourcePath: Value(sourcePath),
+          avatarPath: avatarPath != null
+              ? Value(avatarPath)
+              : const Value.absent(),
+          imageGalleryJson: galleryJson.isNotEmpty
+              ? Value(jsonEncode(galleryJson))
+              : const Value.absent(),
           updatedAt: Value(now),
         ),
       );
@@ -104,7 +131,6 @@ class CharacterRepository {
       return existing.id;
     }
 
-    final id = _uuid.v4();
     await _db.insertCharacter(CharactersCompanion.insert(
       id: id,
       name: imported.name,
@@ -113,6 +139,10 @@ class CharacterRepository {
           ? Value(jsonEncode(imported.worldbook))
           : const Value.absent(),
       tags: Value(jsonEncode(imported.tags)),
+      avatarPath: Value(avatarPath),
+      imageGalleryJson: galleryJson.isNotEmpty
+          ? Value(jsonEncode(galleryJson))
+          : const Value.absent(),
       sourceType: sourceType,
       sourcePath: Value(sourcePath),
       createdAt: now,
@@ -128,6 +158,30 @@ class CharacterRepository {
     ));
 
     return id;
+  }
+
+  /// Saves gallery images into `documents/character_images/<id>/` and returns
+  /// the manifest entries (`{name, path}`).
+  Future<List<Map<String, dynamic>>> _saveGallery(
+    List<ImportedImage> images, {
+    required String characterId,
+  }) async {
+    if (images.isEmpty) return const [];
+    final dir = await getApplicationDocumentsDirectory();
+    final imagesDir =
+        Directory(p.join(dir.path, 'character_images', characterId));
+    await imagesDir.create(recursive: true);
+    final out = <Map<String, dynamic>>[];
+    for (final img in images) {
+      try {
+        final file = File(p.join(imagesDir.path, '${_uuid.v4()}.png'));
+        await file.writeAsBytes(resizeImage(img.bytes));
+        out.add({'name': img.name, 'path': file.path});
+      } catch (_) {
+        // Best-effort: a bad image shouldn't fail the import.
+      }
+    }
+    return out;
   }
 
   /// Creates a user-defined character (sourceType = manual) with a default

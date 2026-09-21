@@ -19,6 +19,7 @@ class CharacterExporter {
     // SillyTavern persona fields.
     data.remove('affinity');
     data.remove('state_schema');
+    data.remove('regex_scripts');
     return jsonEncode({
       'spec': 'chara_card_v2',
       'spec_version': '2.0',

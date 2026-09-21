@@ -14,6 +14,9 @@ class ImportedCharacter {
     this.sourcePath,
     this.affinity,
     this.stateSchema,
+    this.avatarBytes,
+    this.gallery = const [],
+    this.regexScripts = const [],
   });
 
   final String name;
@@ -38,4 +41,37 @@ class ImportedCharacter {
   /// State field-name map from `references/state_schema.json` (key → display
   /// label), if present. Persisted under `core['state_schema']`.
   final Map<String, dynamic>? stateSchema;
+
+  /// The character's portrait/avatar image (from a PNG card, a V3 `assets`
+  /// `icon`, a base64 `image` field, or a Skill avatar file); null when none.
+  final List<int>? avatarBytes;
+
+  /// Extra images (expressions/backgrounds) the character can send in chat.
+  final List<ImportedImage> gallery;
+
+  /// SillyTavern "regex scripts" (JS regex find/replace) applied to the
+  /// character's displayed output (e.g. `<CG{code}>` → `<img src=…>`).
+  final List<Map<String, dynamic>> regexScripts;
+
+  ImportedCharacter withAvatar(List<int> bytes) => ImportedCharacter(
+        name: name,
+        core: core,
+        adaptation: adaptation,
+        worldbook: worldbook,
+        tags: tags,
+        sourcePath: sourcePath,
+        affinity: affinity,
+        stateSchema: stateSchema,
+        avatarBytes: bytes,
+        gallery: gallery,
+        regexScripts: regexScripts,
+      );
+}
+
+/// A named image (expression / background) carried by a character card.
+class ImportedImage {
+  ImportedImage({required this.name, required this.bytes});
+
+  final String name;
+  final List<int> bytes;
 }

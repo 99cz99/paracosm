@@ -42,6 +42,12 @@ class _StoryEditScreenState extends ConsumerState<StoryEditScreen> {
     _name.text = story.name;
     _description.text = story.description;
     _characterId = story.characterId;
+    // A story can still point at a character that was since deleted; null it
+    // so the dropdown's value always matches one of its items (avoids the
+    // "There should be exactly one item …" assertion).
+    if (_characterId != null && await db.getCharacter(_characterId!) == null) {
+      _characterId = null;
+    }
     _worldIds.addAll(await db.getStoryWorldIds(widget.storyId));
     _worldbookIds.addAll(await db.getStoryWorldbookIds(widget.storyId));
     if (mounted) setState(() {});
@@ -168,12 +174,17 @@ class _StoryEditScreenState extends ConsumerState<StoryEditScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String?>(
+                  key: ValueKey(_characterId ?? ''),
+                  isExpanded: true,
                   initialValue: _characterId,
                   decoration: const InputDecoration(labelText: '角色（可选）'),
                   items: [
                     const DropdownMenuItem<String?>(value: null, child: Text('无角色')),
                     for (final c in characters)
-                      DropdownMenuItem<String?>(value: c.id, child: Text(c.name)),
+                      DropdownMenuItem<String?>(
+                        value: c.id,
+                        child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
                   ],
                   onChanged: (v) => setState(() => _characterId = v),
                 ),

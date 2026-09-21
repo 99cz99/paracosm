@@ -152,6 +152,7 @@ class GroupMemoryService {
         provider,
         prompt,
         systemPrompt: '你是结构化信息提取器。只输出 JSON，不要解释、不要代码块。',
+        maxTokens: 16384,
       );
       return _parseJsonObject(text) ?? fallback;
     } catch (_) {

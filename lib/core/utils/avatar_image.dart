@@ -22,6 +22,25 @@ Uint8List resizeAvatarPng(List<int> bytes, {int size = 256}) {
   return img.encodePng(resized);
 }
 
+/// Decodes image bytes and re-encodes as a PNG no larger than [maxDim] on its
+/// longest side (aspect preserved), stripping embedded metadata. Used for
+/// character gallery images (expressions/backgrounds).
+Uint8List resizeImage(List<int> bytes, {int maxDim = 512}) {
+  final decoded = img.decodeImage(Uint8List.fromList(bytes));
+  if (decoded == null) return Uint8List.fromList(bytes);
+  img.Image resized = decoded;
+  final longest =
+      decoded.width > decoded.height ? decoded.width : decoded.height;
+  if (longest > maxDim) {
+    final scale = maxDim / longest;
+    resized = img.copyResize(decoded,
+        width: (decoded.width * scale).round(),
+        height: (decoded.height * scale).round());
+  }
+  resized.textData = null;
+  return img.encodePng(resized);
+}
+
 /// One-off cleanup: re-encodes oversized avatars in the documents dir. Two
 /// cases produce large files that should be shrunk:
 ///  - a character-card PNG used as an avatar (multi-MB `tEXt` chunk), and

@@ -369,10 +369,31 @@ Future<String> _relationText(
 ) async {
   if (_hasSkillGrowth(character)) {
     final affinity = await db.getCharacterAffinity(character.id, worldId);
-    return _formatAffinity(affinity?.affinityJson);
+    if (affinity != null && _tryJsonMap(affinity.affinityJson) != null) {
+      return _formatAffinity(affinity.affinityJson);
+    }
+    // No per-world growth state yet (first reflection hasn't run) — fall back
+    // to the configured seed in `core['affinity']` so /relation shows the
+    // character's own growth rules immediately after import.
+    final seed = _affinitySeed(character);
+    if (seed != null) return _formatAffinity(jsonEncode(seed));
+    return '';
   }
   final relation = await db.getCharacterRelation(character.id, worldId);
   return _formatRelation(relation?.relationJson);
+}
+
+/// Reads the skill growth seed from `core['affinity']`, if present and non-empty.
+Map<String, dynamic>? _affinitySeed(Character character) {
+  try {
+    final core = jsonDecode(character.corePersonaJson) as Map<String, dynamic>;
+    final seed = core['affinity'];
+    return seed is Map && seed.isNotEmpty
+        ? Map<String, dynamic>.from(seed)
+        : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /// Parses a slash input like "/status" or "/help status" and dispatches it.
@@ -579,6 +600,25 @@ String _formatAffinity(String? affinityStr) {
   final notes = map['notes'];
   if (notes != null && notes.toString().isNotEmpty) {
     lines.add('备注：$notes');
+  }
+
+  // Custom growth axes not covered above (skill-defined extras) still show up,
+  // so a seed with non-standard keys isn't silently hidden.
+  const handled = {
+    'trust_level',
+    'trust_value',
+    'corruption_level',
+    'corruption_value',
+    'total_h_scenes_completed',
+    'last_session',
+    'corruption_milestones',
+    'notes',
+  };
+  for (final entry in map.entries) {
+    if (handled.contains(entry.key)) continue;
+    if (_isEmpty(entry.value)) continue;
+    lines.add(
+        _formatValue(_relationLabels[entry.key] ?? entry.key, entry.value));
   }
 
   return lines.join('\n');

@@ -22,6 +22,7 @@ import 'chat_providers.dart';
 import 'widgets/message_bubble.dart';
 import '../../assistant/data/importable_detector.dart';
 import '../../contacts/data/character_repository.dart';
+import '../../contacts/presentation/contacts_providers.dart';
 import '../../worlds/data/world_exporter.dart';
 import '../../worlds/data/worldbook_repository.dart';
 
@@ -105,8 +106,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final db = ref.read(dbProvider);
       switch (result.kind) {
         case ImportableKind.character:
-          await CharacterRepository(db)
+          final id = await CharacterRepository(db)
               .importCharacter(StCardParser().parse(result.json));
+          ref.invalidate(characterProvider(id));
         case ImportableKind.world:
           final companion = parseWorldJson(result.json);
           if (companion == null) throw AppException('不是有效的世界 JSON');
@@ -328,6 +330,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final messagesAsync = ref.watch(messagesProvider(widget.sessionId));
     final character = ref.watch(chatCharacterProvider(widget.sessionId)).value;
+    final imagePaths = parseImageGallery(character);
+    final regexScripts = parseRegexScripts(character);
     final characterId = character?.id;
     final isAssistantChat = character?.builtInKey != null;
     final title = character?.name ?? '聊天';
@@ -345,8 +349,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // another conversation must not leak into this one. Intentionally do NOT
     // select this session's text here: it changes every delta and would rebuild
     // the whole screen. The bubble widget below watches the text itself.
-    final showStreaming = ref.watch(
-        chatControllerProvider.select((s) => s.isGenerating(widget.sessionId)));
+    final showStreaming = ref.watch(chatControllerProvider
+        .select((s) => s.streams[widget.sessionId] != null));
 
     return Scaffold(
       appBar: AppBar(
@@ -428,6 +432,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       onAvatarTap: characterId == null
                           ? null
                           : () => context.push('/contacts/$characterId'),
+                      imagePaths: imagePaths,
+                      regexScripts: regexScripts,
                     );
                   }
                   final msg = reversed[showStreaming ? index - 1 : index];
@@ -448,6 +454,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             ? null
                             : () => context.push('/contacts/$characterId'),
                         onRecall: () => _recall(msg),
+                        imagePaths: imagePaths,
+                        regexScripts: regexScripts,
                       ),
                       if (importable != null)
                         _ImportButton(
@@ -880,18 +888,59 @@ class _SessionSettingsDialogState extends State<_SessionSettingsDialog> {
 
 /// The in-progress assistant bubble. Watches this session's streaming text
 /// itself so each delta only rebuilds this small widget, not the whole screen.
+/// Parses a character's `imageGalleryJson` into a name → file-path map, used
+/// to render `<img="name">` markers in message bubbles.
+Map<String, String> parseImageGallery(Character? c) {
+  final raw = c?.imageGalleryJson;
+  if (raw == null || raw.isEmpty) return const {};
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) return const {};
+    final out = <String, String>{};
+    for (final g in decoded) {
+      if (g is! Map) continue;
+      final name = g['name']?.toString() ?? '';
+      final path = g['path']?.toString() ?? '';
+      if (name.isNotEmpty && path.isNotEmpty) out[name] = path;
+    }
+    return out;
+  } catch (_) {
+    return const {};
+  }
+}
+
+/// Parses a character's `core['regex_scripts']` into a list of scripts.
+List<Map<String, dynamic>> parseRegexScripts(Character? c) {
+  try {
+    final decoded = c == null ? null : jsonDecode(c.corePersonaJson);
+    final scripts = decoded is Map ? decoded['regex_scripts'] : null;
+    return scripts is List
+        ? [
+            for (final s in scripts)
+              if (s is Map) Map<String, dynamic>.from(s),
+          ]
+        : const [];
+  } catch (_) {
+    return const [];
+  }
+}
+
 class _StreamingBubble extends ConsumerWidget {
   const _StreamingBubble({
     required this.sessionId,
     this.avatarName,
     this.avatarPath,
     this.onAvatarTap,
+    this.imagePaths = const {},
+    this.regexScripts = const [],
   });
 
   final String sessionId;
   final String? avatarName;
   final String? avatarPath;
   final VoidCallback? onAvatarTap;
+  final Map<String, String> imagePaths;
+  final List<Map<String, dynamic>> regexScripts;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -913,6 +962,8 @@ class _StreamingBubble extends ConsumerWidget {
       avatarName: avatarName,
       avatarPath: avatarPath,
       onAvatarTap: onAvatarTap,
+      imagePaths: imagePaths,
+      regexScripts: regexScripts,
     );
   }
 }

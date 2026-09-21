@@ -142,12 +142,17 @@ class _StoryCreateScreenState extends ConsumerState<StoryCreateScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String?>(
+                  key: ValueKey(_characterId ?? ''),
+                  isExpanded: true,
                   initialValue: _characterId,
                   decoration: const InputDecoration(labelText: '角色（可选）'),
                   items: [
                     const DropdownMenuItem<String?>(value: null, child: Text('无角色')),
                     for (final c in characters)
-                      DropdownMenuItem<String?>(value: c.id, child: Text(c.name)),
+                      DropdownMenuItem<String?>(
+                        value: c.id,
+                        child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
                   ],
                   onChanged: (v) => setState(() => _characterId = v),
                 ),

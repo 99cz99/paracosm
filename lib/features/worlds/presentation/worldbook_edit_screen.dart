@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/import/worldbook_exporter.dart';
+import '../../../core/world/world_context.dart';
 import '../../../core/network/llm/provider_factory.dart';
 import '../../../core/network/llm/translator.dart';
 import '../../../core/providers/db_providers.dart';
@@ -178,32 +179,40 @@ class _WorldbookEditScreenState extends ConsumerState<WorldbookEditScreen> {
 
   void _addEntry() => setState(() => _entries.add(_EntryController()));
 
-  /// Tests which entries' keywords match a sample text, so users can verify
-  /// triggering before saving. Mirrors `WorldbookMatcher._containsAny`.
+  /// Tests which entries trigger on a sample text, reusing the shared matcher
+  /// so the preview matches runtime injection (including regex/recursion).
   void _testTrigger() {
     final input = _testController.text.trim();
     if (input.isEmpty) {
       setState(() => _testResult = '请输入一段文字');
       return;
     }
-    final matched = <String>[];
+    final entries = <Map<String, dynamic>>[];
     for (final e in _entries) {
-      final name = e.name.text.trim();
       final keys = e.keys.text
           .split(RegExp(r'[,，、]'))
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      final hits = keys.where((k) => input.contains(k)).toList();
-      if (hits.isNotEmpty) {
-        matched.add('· ${name.isEmpty ? '（无名称条目）' : name}：'
-            '命中 ${hits.map((h) => '「$h」').join('、')}');
-      }
+      entries.add({
+        ...e.original,
+        'comment': e.name.text.trim(),
+        'keys': keys,
+        'content': e.content.text.trim(),
+        'enabled': true,
+        'constant': false,
+      });
     }
+    final matched = WorldbookMatcher.matchedEntries(
+        jsonEncode({'entries': entries}), input);
+    final lines = matched.map((e) {
+      final name = (e['comment']?.toString() ?? '').trim();
+      return '· ${name.isEmpty ? '（无名称条目）' : name}';
+    }).toList();
     setState(() {
       _testResult = matched.isEmpty
           ? '没有命中任何条目，请检查并修改词条的关键词'
-          : '命中 ${matched.length} 条：\n${matched.join('\n')}';
+          : '命中 ${matched.length} 条：\n${lines.join('\n')}';
     });
   }
 

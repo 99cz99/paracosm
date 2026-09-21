@@ -20,6 +20,8 @@ class SkillImporter {
     final stateSchema = _readStateSchema(archive);
     final research = readResearchEntries(archive);
     final sources = _readSources(archive);
+    final avatar = _readAvatar(archive);
+    final images = _readImages(archive);
 
     // 1. Try any JSON card (skip the affinity/state-schema state files).
     for (final file in archive) {
@@ -30,7 +32,7 @@ class SkillImporter {
         try {
           final content = utf8.decode(file.content as List<int>);
           return _withExtras(StCardParser().parse(content), affinity, research,
-              sources, stateSchema: stateSchema);
+              sources, stateSchema: stateSchema, avatar: avatar, images: images);
         } catch (_) {
           // keep looking
         }
@@ -49,7 +51,7 @@ class SkillImporter {
       final imported = importMarkdown(content);
       if (imported != null) {
         return _withExtras(imported, affinity, research, sources,
-            stateSchema: stateSchema);
+            stateSchema: stateSchema, avatar: avatar, images: images);
       }
     }
 
@@ -92,12 +94,54 @@ class SkillImporter {
   static bool _isStateSchemaPath(String name) =>
       name.replaceAll('\\', '/').toLowerCase() == 'references/state_schema.json';
 
+  /// Reads a root-level avatar image (`avatar.*` / `role_avatar.*` /
+  /// `portrait.*`), if the ZIP carries one.
+  List<int>? _readAvatar(Archive archive) {
+    const names = {
+      'avatar.png', 'avatar.jpg', 'avatar.jpeg',
+      'role_avatar.png', 'role_avatar.jpg', 'role_avatar.jpeg',
+      'portrait.png', 'portrait.jpg', 'portrait.jpeg',
+    };
+    for (final file in archive) {
+      if (!file.isFile) continue;
+      final base =
+          file.name.replaceAll('\\', '/').split('/').last.toLowerCase();
+      if (names.contains(base)) return file.content as List<int>;
+    }
+    return null;
+  }
+
+  /// Reads non-research image files as the character's sendable gallery
+  /// (filename without extension becomes the trigger name).
+  List<ImportedImage> _readImages(Archive archive) {
+    final images = <ImportedImage>[];
+    for (final file in archive) {
+      if (!file.isFile) continue;
+      final name = file.name.replaceAll('\\', '/');
+      final lower = name.toLowerCase();
+      if (lower.startsWith('references/')) continue;
+      if (!lower.endsWith('.png') &&
+          !lower.endsWith('.jpg') &&
+          !lower.endsWith('.jpeg') &&
+          !lower.endsWith('.webp')) {
+        continue;
+      }
+      final stem = name.split('/').last.replaceFirst(
+          RegExp(r'\.(png|jpg|jpeg|webp)$', caseSensitive: false), '');
+      if (stem.isEmpty) continue;
+      images.add(ImportedImage(name: stem, bytes: file.content as List<int>));
+    }
+    return images;
+  }
+
   ImportedCharacter _withExtras(
     ImportedCharacter c,
     Map<String, dynamic>? affinity,
     List<Map<String, dynamic>> research,
     List<Map<String, dynamic>> sources, {
     Map<String, dynamic>? stateSchema,
+    List<int>? avatar,
+    List<ImportedImage> images = const [],
   }) {
     final hasAffinity = affinity != null && affinity.isNotEmpty;
     final hasResearch = research.isNotEmpty;
@@ -133,6 +177,9 @@ class SkillImporter {
       sourcePath: c.sourcePath,
       affinity: hasAffinity ? affinity : null,
       stateSchema: hasStateSchema ? stateSchema : null,
+      avatarBytes: avatar ?? c.avatarBytes,
+      gallery: [...c.gallery, ...images],
+      regexScripts: c.regexScripts,
     );
   }
 

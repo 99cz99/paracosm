@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' hide Column;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/db_providers.dart';
@@ -58,6 +61,8 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
               ),
               const SizedBox(height: 24),
               _bindingsSection(context, group),
+              const SizedBox(height: 24),
+              _autoSpeakSection(context, group, members),
               const SizedBox(height: 24),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -275,6 +280,184 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       worldIds: worldIds,
       worldbookIds: selected,
     );
+  }
+
+  List<Map<String, dynamic>> _parseRules(Group group) {
+    final raw = group.autoSpeakJson;
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is List
+          ? [
+              for (final r in decoded)
+                if (r is Map) Map<String, dynamic>.from(r),
+            ]
+          : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _saveRules(Group group, List<Map<String, dynamic>> rules) async {
+    await ref.read(dbProvider).updateGroup(widget.groupId,
+        GroupsCompanion(autoSpeakJson: Value(jsonEncode(rules))));
+    ref.invalidate(groupProvider(widget.groupId));
+  }
+
+  String _charName(List<GroupMemberWithCharacter> members, String id) {
+    for (final m in members) {
+      if (m.member.characterId == id) return m.character.name;
+    }
+    return '（已移除角色）';
+  }
+
+  Widget _autoSpeakSection(
+    BuildContext context,
+    Group group,
+    List<GroupMemberWithCharacter> members,
+  ) {
+    final rules = _parseRules(group);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('自动发言规则', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        if (rules.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              '未设置规则。规则命中时角色会自动插话（正则 + 延迟 + 概率）。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          )
+        else
+          for (final r in rules)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(r['pattern']?.toString() ?? ''),
+              subtitle: Text(
+                '${_charName(members, r['characterId']?.toString() ?? '')} · '
+                '延迟 ${r['delay'] ?? 0} 秒 · 概率 ${r['probability'] ?? 100}%',
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: '删除规则',
+                onPressed: () => _removeRule(group, r),
+              ),
+            ),
+        TextButton.icon(
+          onPressed: () => _addRule(group, members),
+          icon: const Icon(Icons.add),
+          label: const Text('添加规则'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _removeRule(Group group, Map<String, dynamic> rule) async {
+    final rules = _parseRules(group);
+    rules.removeWhere((r) => r['id'] == rule['id']);
+    await _saveRules(group, rules);
+  }
+
+  Future<void> _addRule(
+    Group group,
+    List<GroupMemberWithCharacter> members,
+  ) async {
+    if (members.isEmpty) {
+      await showErrorDialog(context, '群聊没有成员');
+      return;
+    }
+    final patternCtl = TextEditingController();
+    final delayCtl = TextEditingController(text: '0');
+    final probCtl = TextEditingController(text: '100');
+    var characterId = members.first.member.characterId;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('添加自动发言规则'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: patternCtl,
+                decoration: const InputDecoration(
+                  labelText: '触发正则',
+                  helperText: '命中最近消息即触发，如 苹果|吃饭',
+                  helperMaxLines: 3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: characterId,
+                decoration: const InputDecoration(labelText: '发言角色'),
+                items: [
+                  for (final m in members)
+                    DropdownMenuItem(
+                      value: m.member.characterId,
+                      child: Text(m.character.name),
+                    ),
+                ],
+                onChanged: (v) {
+                  if (v != null) characterId = v;
+                },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: delayCtl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: '延迟（秒）'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: probCtl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '概率（0-100）',
+                  helperText: '100 = 必定触发',
+                  helperMaxLines: 3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final pattern = patternCtl.text.trim();
+              if (pattern.isEmpty) return;
+              Navigator.of(dialogContext).pop({
+                'id': const Uuid().v4(),
+                'pattern': pattern,
+                'characterId': characterId,
+                'delay': double.tryParse(delayCtl.text.trim()) ?? 0,
+                'probability': double.tryParse(probCtl.text.trim()) ?? 100,
+                'enabled': true,
+              });
+            },
+            child: const Text('添加'),
+          ),
+        ],
+      ),
+    );
+
+    patternCtl.dispose();
+    delayCtl.dispose();
+    probCtl.dispose();
+
+    if (result == null) return;
+    final rules = _parseRules(group);
+    rules.add(result);
+    await _saveRules(group, rules);
   }
 
   String _samplingSummary(Group group) {

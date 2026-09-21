@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/commands/slash_commands.dart';
 import '../../../core/db/database.dart';
 import '../../../core/network/llm/llm_provider.dart';
+import '../../../core/network/llm/provider_config.dart';
 import '../../../core/network/llm/provider_factory.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
@@ -14,6 +17,7 @@ import '../../../core/utils/app_exception.dart';
 import '../../chat/data/memory_service.dart';
 import '../data/group_memory_service.dart';
 import '../data/group_service.dart';
+import '../data/auto_speak_rules.dart';
 import '../data/group_speaker.dart';
 
 class GroupChatUiState {
@@ -37,8 +41,10 @@ final groupChatControllerProvider =
 /// pair-relation extraction.
 class GroupChatController extends Notifier<GroupChatUiState> {
   static final _uuid = const Uuid();
+  static const int _maxAutoSpeakDepth = 3;
   var _cancelling = false;
   LlmProvider? _currentProvider;
+  final Map<String, Timer> _autoTimers = {};
 
   @override
   GroupChatUiState build() {
@@ -57,6 +63,7 @@ class GroupChatController extends Notifier<GroupChatUiState> {
     }
 
     _cancelling = false;
+    _cancelAutoSpeakTimers();
     final db = ref.read(dbProvider);
 
     // 1. Load the group first — check it still exists before persisting so a
@@ -108,7 +115,20 @@ class GroupChatController extends Notifier<GroupChatUiState> {
       userText: trimmed,
     );
 
-    // 4. Stream.
+    // 4. Run the assistant turn (stream → attribute → persist).
+    await _runAssistantTurn(db, groupId, members, config, forcedSpeakerId);
+
+    // 5. Characters may auto-speak per the group's rules.
+    await _evaluateAutoSpeak(db, groupId, depth: 1);
+  }
+
+  Future<void> _runAssistantTurn(
+    AppDatabase db,
+    String groupId,
+    List<GroupMemberWithCharacter> members,
+    LlmProviderConfig config,
+    String? forcedSpeakerId,
+  ) async {
     final request = await GroupService(db)
         .buildRequest(groupId, forcedSpeakerId: forcedSpeakerId);
     final provider = buildLlmProvider(config);
@@ -166,9 +186,8 @@ class GroupChatController extends Notifier<GroupChatUiState> {
       );
     }
 
-    // 5. Attribute and persist. Persist before clearing the streaming state so
-    // the replies land in the list before the streaming bubble is dropped —
-    // avoids a one-frame flicker.
+    // Persist before clearing the streaming state so the replies land in the
+    // list before the streaming bubble is dropped — avoids a one-frame flicker.
     final replies = _parseReplies(reply, forcedSpeakerId, members);
     try {
       if (await db.getGroup(groupId) != null) {
@@ -183,6 +202,91 @@ class GroupChatController extends Notifier<GroupChatUiState> {
     } finally {
       state = const GroupChatUiState();
     }
+  }
+
+  void _cancelAutoSpeakTimers() {
+    for (final t in _autoTimers.values) {
+      t.cancel();
+    }
+    _autoTimers.clear();
+  }
+
+  Future<void> _evaluateAutoSpeak(
+    AppDatabase db,
+    String groupId, {
+    required int depth,
+  }) async {
+    final group = await db.getGroup(groupId);
+    if (group == null) return;
+    final raw = group.autoSpeakJson;
+    if (raw == null || raw.isEmpty) return;
+    List<Map<String, dynamic>> rules;
+    try {
+      final decoded = jsonDecode(raw);
+      rules = decoded is List
+          ? [
+              for (final r in decoded)
+                if (r is Map) Map<String, dynamic>.from(r),
+            ]
+          : const [];
+    } catch (_) {
+      return;
+    }
+    if (rules.isEmpty) return;
+
+    final messages = await db.getGroupMessages(groupId);
+    const window = 6;
+    final recent = messages.length <= window
+        ? messages
+        : messages.sublist(messages.length - window);
+    final context = recent.map((m) => m.content).join('\n');
+
+    final hits = AutoSpeakRules.evaluate(rules, context, Random());
+    for (final r in hits) {
+      final id = r['id']?.toString() ?? '';
+      if (id.isEmpty || _autoTimers.containsKey(id)) continue;
+      final characterId = r['characterId']?.toString() ?? '';
+      if (characterId.isEmpty) continue;
+      final delay = _toDouble(r['delay'], 0);
+      final timer = Timer(Duration(milliseconds: (delay * 1000).round()), () {
+        _autoTimers.remove(id);
+        unawaited(_autoSpeak(groupId, characterId, depth));
+      });
+      _autoTimers[id] = timer;
+    }
+  }
+
+  Future<void> _autoSpeak(
+    String groupId,
+    String characterId,
+    int depth,
+  ) async {
+    try {
+      if (state.isGenerating) return;
+      final db = ref.read(dbProvider);
+      final group = await db.getGroup(groupId);
+      if (group == null) return;
+      final members = await db.watchMembersFor(groupId).first;
+      if (!members.any((m) => m.member.characterId == characterId)) return;
+      final config = await resolveProvider(
+          db, ref.read(secureKeyStoreProvider),
+          providerId: group.providerId);
+      if (config == null) return;
+
+      _cancelling = false;
+      await _runAssistantTurn(db, groupId, members, config, characterId);
+
+      if (depth < _maxAutoSpeakDepth) {
+        await _evaluateAutoSpeak(db, groupId, depth: depth + 1);
+      }
+    } catch (_) {
+      // Auto-speak is best-effort; never surface errors to the user.
+    }
+  }
+
+  static double _toDouble(dynamic v, double fallback) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? fallback;
   }
 
   List<({String? speakerId, String content})> _parseReplies(
@@ -289,12 +393,12 @@ class GroupChatController extends Notifier<GroupChatUiState> {
   }
 
   Future<void> _runGroupMemoryUpdate(AppDatabase db, String groupId) async {
-    final group = await db.getGroup(groupId);
-    if (group == null) return;
-    final config = await resolveProvider(db, ref.read(secureKeyStoreProvider),
-        providerId: group.providerId);
-    if (config == null) return;
     try {
+      final group = await db.getGroup(groupId);
+      if (group == null) return;
+      final config = await resolveProvider(db, ref.read(secureKeyStoreProvider),
+          providerId: group.providerId);
+      if (config == null) return;
       await GroupMemoryService(db)
           .updateAfterTurn(groupId, MemoryService.buildProvider(config));
     } catch (_) {
@@ -305,6 +409,7 @@ class GroupChatController extends Notifier<GroupChatUiState> {
   void cancel() {
     _cancelling = true;
     _currentProvider?.cancel();
+    _cancelAutoSpeakTimers();
     state = const GroupChatUiState();
   }
 

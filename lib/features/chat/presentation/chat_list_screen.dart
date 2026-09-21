@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import '../../contacts/presentation/contacts_providers.dart';
 import '../../contacts/presentation/widgets/character_avatar.dart';
 import '../../group_chat/presentation/group_providers.dart';
 import '../../group_chat/presentation/widgets/group_avatar.dart';
+import '../../worlds/presentation/worlds_providers.dart';
 import '../data/session_repository.dart';
 import 'chat_providers.dart';
 
@@ -25,6 +28,10 @@ class ChatListScreen extends ConsumerWidget {
             .watch(characterWorldbookNamesProvider)
             .value ??
         const <String, List<String>>{};
+    final worldbookIdToName = {
+      for (final b in ref.watch(worldbooksProvider).value ?? const <Worldbook>[])
+        b.id: b.name,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -42,8 +49,8 @@ class ChatListScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: _buildBody(
-          context, ref, sessionsAsync, groupsAsync, worldbookNamesByChar),
+      body: _buildBody(context, ref, sessionsAsync, groupsAsync,
+          worldbookNamesByChar, worldbookIdToName),
     );
   }
 
@@ -53,6 +60,7 @@ class ChatListScreen extends ConsumerWidget {
     AsyncValue<List<SessionWithCharacter>> sessionsAsync,
     AsyncValue<List<Group>> groupsAsync,
     Map<String, List<String>> worldbookNamesByChar,
+    Map<String, String> worldbookIdToName,
   ) {
     if (sessionsAsync.isLoading || groupsAsync.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -99,8 +107,11 @@ class ChatListScreen extends ConsumerWidget {
               subtitle: _subtitleWithWorldTags(
                 context,
                 worldNames: s.worldName == null ? const [] : [s.worldName!],
-                worldbookNames:
-                    worldbookNamesByChar[s.session.characterId] ?? const [],
+                worldbookNames: _sessionWorldbookNames(
+                  s.session,
+                  worldbookNamesByChar,
+                  worldbookIdToName,
+                ),
                 timeText: _formatTime(s.session.lastMessageAt),
               ),
               onTap: () => context.push('/chat/${s.session.id}'),
@@ -208,6 +219,39 @@ class ChatListScreen extends ConsumerWidget {
 
   String _formatTime(int ms) =>
       DateFormat('MM-dd HH:mm').format(DateTime.fromMillisecondsSinceEpoch(ms));
+
+  /// Worldbook names actually injected into this session: the session-level
+  /// selection (`worldbookIdsJson`) when it's explicitly set, otherwise the
+  /// character's bound worldbooks. This keeps the chat-list tag in sync with
+  /// what the request builder really uses.
+  List<String> _sessionWorldbookNames(
+    Session session,
+    Map<String, List<String>> worldbookNamesByChar,
+    Map<String, String> worldbookIdToName,
+  ) {
+    final raw = session.worldbookIdsJson;
+    if (raw != null) {
+      return [
+        for (final id in _parseWorldbookIds(raw))
+          if (worldbookIdToName[id] != null) worldbookIdToName[id]!,
+      ];
+    }
+    return worldbookNamesByChar[session.characterId] ?? const [];
+  }
+
+  Set<String> _parseWorldbookIds(String raw) {
+    if (raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty)
+            .toSet();
+      }
+    } catch (_) {}
+    return const {};
+  }
 
   Widget _subtitleWithWorldTags(
     BuildContext context, {
