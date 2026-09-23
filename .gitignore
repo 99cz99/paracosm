@@ -53,3 +53,6 @@ backups/
 # Android Gradle 构建产物
 /android/build/
 /android/app/build/
+
+# Claude Code 本地工具（skills 等，个人配置不进仓库）
+.claude/

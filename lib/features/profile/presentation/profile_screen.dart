@@ -15,6 +15,7 @@ import '../../../core/network/update_checker.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/utils/app_exception.dart';
 import '../../../core/utils/dialogs.dart';
+import '../../../core/widgets/color_field.dart';
 
 /// 应用版本信息（versionName + build number），供「关于」展示。
 final packageInfoProvider = FutureProvider<PackageInfo>(
@@ -53,6 +54,13 @@ class ProfileScreen extends ConsumerWidget {
             onChanged: (v) => ref
                 .read(dbProvider)
                 .setSetting('token_display_enabled', v.toString()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text('外观颜色'),
+            subtitle: const Text('用户/助手气泡色、消息文本色（支持 #RRGGBB）'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _editAppearance(context, ref),
           ),
           ListTile(
             leading: const Icon(Icons.search),
@@ -205,6 +213,70 @@ class ProfileScreen extends ConsumerWidget {
       await db.setSetting('user_name', result);
       if (context.mounted) await showSuccessDialog(context, '已保存');
     }
+  }
+
+  Future<void> _editAppearance(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(dbProvider);
+    final userBubble = await db.getSetting('chat_user_bubble_color');
+    final assistantBubble = await db.getSetting('chat_assistant_bubble_color');
+    final userText = await db.getSetting('chat_user_text_color');
+    final assistantText = await db.getSetting('chat_assistant_text_color');
+    if (!context.mounted) return;
+
+    String? u = userBubble;
+    String? a = assistantBubble;
+    String? ut = userText;
+    String? at = assistantText;
+    final saved = await showDialog<bool>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('外观颜色'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ColorRow(
+                label: '用户气泡颜色',
+                value: u,
+                onChanged: (v) => setState(() => u = v),
+              ),
+              ColorRow(
+                label: '角色气泡颜色',
+                value: a,
+                onChanged: (v) => setState(() => a = v),
+              ),
+              ColorRow(
+                label: '用户文本颜色',
+                value: ut,
+                onChanged: (v) => setState(() => ut = v),
+              ),
+              ColorRow(
+                label: '角色文本颜色',
+                value: at,
+                onChanged: (v) => setState(() => at = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    await db.setSetting('chat_user_bubble_color', u ?? '');
+    await db.setSetting('chat_assistant_bubble_color', a ?? '');
+    await db.setSetting('chat_user_text_color', ut ?? '');
+    await db.setSetting('chat_assistant_text_color', at ?? '');
+    if (context.mounted) await showSuccessDialog(context, '已保存');
   }
 
   Future<void> _checkUpdate(BuildContext context) async {

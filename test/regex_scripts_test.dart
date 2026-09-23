@@ -57,4 +57,72 @@ void main() {
     ];
     expect(applyRegexScripts(scripts, 'a[QQ]b'), 'a[QQ]b');
   });
+
+  test('prompt-side script strips <TTL> only at/after minDepth', () {
+    final scripts = [
+      {
+        'findRegex': r'/<TTL>[\s\S]*?<\/TTL>/gm',
+        'replaceString': '',
+        'promptOnly': true,
+        'placement': [2],
+        'minDepth': 4,
+      },
+    ];
+    expect(
+      applyPromptRegexScripts(scripts, '<TTL>panel</TTL>',
+          role: 'assistant', depth: 3),
+      '<TTL>panel</TTL>',
+    );
+    expect(
+      applyPromptRegexScripts(scripts, '<TTL>panel</TTL>',
+          role: 'assistant', depth: 4),
+      '',
+    );
+  });
+
+  test('prompt-side script honors placement (AI-only skips user)', () {
+    final scripts = [
+      {
+        'findRegex': r'/<TTL>[\s\S]*?<\/TTL>/gm',
+        'replaceString': '',
+        'promptOnly': true,
+        'placement': [2],
+      },
+    ];
+    expect(applyPromptRegexScripts(scripts, '<TTL>x</TTL>', role: 'user'),
+        '<TTL>x</TTL>');
+  });
+
+  test('display-side script honors placement (AI-only skips user)', () {
+    final scripts = [
+      {
+        'findRegex': r'/<WX>[\s\S]*?<\/WX>/gm',
+        'replaceString': '',
+        'placement': [2],
+      },
+    ];
+    expect(applyRegexScripts(scripts, '<WX>hi</WX>', role: 'assistant'), '');
+    expect(
+        applyRegexScripts(scripts, '<WX>hi</WX>', role: 'user'), '<WX>hi</WX>');
+  });
+
+  test('display-side script honors minDepth (only clears old messages)', () {
+    final scripts = [
+      {
+        'findRegex': r'/<WX>[\s\S]*?<\/WX>/gm',
+        'replaceString': '',
+        'placement': [2],
+        'minDepth': 4,
+      },
+    ];
+    // Recent messages (depth < 4) keep their WeChat text; older ones are cut.
+    expect(
+      applyRegexScripts(scripts, '<WX>hi</WX>', role: 'assistant', depth: 3),
+      '<WX>hi</WX>',
+    );
+    expect(
+      applyRegexScripts(scripts, '<WX>hi</WX>', role: 'assistant', depth: 4),
+      '',
+    );
+  });
 }

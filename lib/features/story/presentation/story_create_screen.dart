@@ -6,6 +6,7 @@ import '../../../core/db/database.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/utils/dialogs.dart';
 import '../../../core/utils/multi_select_sheet.dart';
+import '../../../core/utils/pinyin.dart';
 import '../../contacts/presentation/contacts_providers.dart';
 import '../../worlds/presentation/worlds_providers.dart';
 import '../data/story_repository.dart';
@@ -114,7 +115,14 @@ class _StoryCreateScreenState extends ConsumerState<StoryCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final characters = ref.watch(charactersProvider).value ?? [];
+    final characters = [...(ref.watch(charactersProvider).value ?? [])]
+      ..sort((a, b) {
+        final ia = pinyinInitial(a.name);
+        final ib = pinyinInitial(b.name);
+        final c = ia.compareTo(ib);
+        if (c != 0) return c;
+        return a.name.compareTo(b.name);
+      });
     final worlds = ref.watch(worldsProvider).value ?? [];
     final worldbooks = ref.watch(worldbooksProvider).value ?? [];
     final worldNames = [for (final w in worlds) if (_worldIds.contains(w.id)) w.name];

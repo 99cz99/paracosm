@@ -19,7 +19,17 @@ class CharacterExporter {
     // SillyTavern persona fields.
     data.remove('affinity');
     data.remove('state_schema');
-    data.remove('regex_scripts');
+    // `regex_scripts` is a SillyTavern field that lives under `extensions`
+    // (not top-level); move it back so HTML/regex cards round-trip on export.
+    final regexScripts = data.remove('regex_scripts');
+    if (regexScripts is List && regexScripts.isNotEmpty) {
+      final existing = data['extensions'];
+      final extensions = existing is Map<String, dynamic>
+          ? Map<String, dynamic>.from(existing)
+          : <String, dynamic>{};
+      extensions['regex_scripts'] = regexScripts;
+      data['extensions'] = extensions;
+    }
     return jsonEncode({
       'spec': 'chara_card_v2',
       'spec_version': '2.0',

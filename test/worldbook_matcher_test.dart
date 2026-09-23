@@ -110,4 +110,17 @@ void main() {
     final out = WorldbookMatcher.triggered(book, 'x', random: Random(42));
     expect(out.single, anyOf('甲', '乙'));
   });
+
+  test('constant entries honor depth gating', () {
+    final book = _book([
+      {'constant': true, 'keys': [], 'depth': 4, 'content': '微信玩法'},
+    ]);
+    // Below the entry's depth → not injected; at/above it → always injected.
+    expect(WorldbookMatcher.matchedEntries(book, 'anything', depth: 3),
+        isEmpty);
+    expect(
+      _contents(WorldbookMatcher.matchedEntries(book, 'anything', depth: 4)),
+      contains('微信玩法'),
+    );
+  });
 }

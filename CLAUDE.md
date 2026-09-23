@@ -149,6 +149,11 @@ lib/
 - **带配图角色卡**（schema v19 `Characters.imageGalleryJson`）：导入时提取卡片配图——**头像**：PNG 卡（`_parseBytes` `withAvatar`，PNG 即立绘）/ V3 `assets` 的 `icon` / JSON `image` base64 / Skill 的 `avatar.*`；**图库**：V3 `assets` 的 `emotion`/`background`、`extensions.risuai.additionalAssets`（`[name, base64WebP]`）、`extensions.chub.expressions`、Skill ZIP 图片（文件名当 name）。图存 `documents/character_images/<id>/`（`resizeImage` 等比缩 512 剥元数据），清单存 `imageGalleryJson`（`[{name,path}]`）。**渲染**（`message_bubble.dart`）：`<img="名字">` → 图库本地图；SillyTavern **regex_scripts**（存 `core['regex_scripts']`，`applyRegexScripts` 做 JS 正则 `/p/flags` + `$1` 反向引用）把 `<CG{代码}>` 等转成 HTML——`<img src=url>` 用 `Image.network`、含 HTML 时整段走 `_HtmlView`（`HtmlWidget`，`buildAsync:false` 同步构建 + `_sanitizeHtml` 六步预处理：剥 style/script、扁平化 details/summary、剥 body、markdown 加粗、去引用符、中和溢出 CSS——`display:flex→block`、剥 `height`/`max-width`/`gap`、`position:absolute→static`，否则面板固定尺寸溢出 320px 气泡）。`CharacterExporter` 导出时过滤 `regex_scripts`/`imageGalleryJson` 等内部 key。
 - **regex_scripts 标志位**（`core/utils/regex_scripts.dart`）：`applyRegexScripts` 只套显示内容，必须跳过 `disabled:true` 和 `promptOnly:true` 的脚本。忽略 `promptOnly` 会把「删除<TTL>」这类 prompt-only 删除脚本套到显示上，落库补全 `</TTL>` 时删掉包裹状态栏/微信面板的 `<TTL>` 块 → **面板整块消失**（1.17.20 修，`regex_scripts_test.dart` 有回归用例）。
 
+- **外观颜色（全局 + 每会话）**（schema v20/v21）：`Sessions` 加 `bubbleUserColor`/`bubbleAssistantColor`/`userTextColor`/`assistantTextColor`（hex，null=用全局），全局存 Settings 键 `chat_user_bubble_color` 等。`chatColorsProvider`（`chat_providers.dart`）按「会话列 → 全局 → null」解析成 `ChatColors`；`MessageBubble` 加 `bubbleColor`/`textColor` 参数（null 回落主题 `primaryContainer`/`surfaceContainerHighest`）。选色用 `core/widgets/color_field.dart` 的 `ColorRow`（点行弹 `showColorPicker` 底部色板：预设色块 + `#RRGGBB` hex 输入 + 默认）。
+- **附件上传**（`ChatController.sendAttachments`）：聊天输入框 📎 → `FilePicker.pickFiles(type: any)` → 拷到 `documents/chat_attachments/<uuid><ext>` → 暂存 `_pending` chip → 用户输入要求后一起发。图片落 `type:'image'`（`_buildRequest` 读文件 `base64Encode` 转 `ChatMessage.images` 多模态发给模型识图）；文本文件（`_readTextFile`，`_textExtensions` 白名单 + 含 null 字节判二进制）读内容落用户消息；不可读文件落「收到文件 name」note 触发回复。文件卡片 `_buildFile`（图标+文件名），附件按 `role` 右对齐（用户侧）。
+- **消息内联文字色**：`markdown_text.dart` 的 `_inlineSpans`/`_colorizeText` 识别 `<font color="X">`/`<span style="color:X">`（hex + 常见命名色，`_colorTag`）；`message_bubble.dart` 的 `_stripHtmlKeepColor` 剥其他 HTML 但保留 font/span 颜色标签。
+- **自动续写**：`sendMessage`/`_runReply` 流式循环里，`finishReason=='length'`（maxTokens 截断）且 buffer 非空时，把已生成段 +「继续输出，直接接上文，不要重复」喂回重发，上限 5 段；token 跨段累加。
+
 ## ⚠️ 已知问题（重要）
 
 1. **native assets 上游 bug**：`objective_c 9.6.x` + `native_toolchain_c 0.19.4` 的构建钩子引用了 `Architecture.arm64e`，但已发布的 `code_assets 2.0.0` 没有该枚举，导致 `flutter test` 报 `Member not found: 'arm64e'`。已在 `pubspec.yaml` 用 `dependency_overrides` 降级到 `objective_c: 9.5.0` + `native_toolchain_c: 0.19.3`（code_assets 1.x）。**不要轻易 `pub upgrade` 移除这两个 override**，会再次踩坑。
@@ -161,6 +166,7 @@ lib/
 8. **聊天列表用 `reverse: true`**：别改 `reverse: false` + ScrollController——懒加载 + 气泡高度不一，`jumpTo(maxScrollExtent)` 在打开那一刻不可靠，会停在顶部要手动滑。
 9. **别跑 `flutter clean`（会清掉 sqlite3 原生资产、重建连不上 GitHub）**：`sqlite3` 包的 native assets 钩子要从 GitHub 下载预编译 `.so`（`github.com/simolus3/sqlite3.dart/releases`），中国网络连不上 github。`flutter clean` 删掉 `.dart_tool/hooks_runner/shared/sqlite3/build/download-<hash 前8位>/libsqlite3.so` 缓存后，重建就报 `Building assets for package:sqlite3 failed`（SocketException timeout）。恢复：用 GitHub 代理 `https://gh-proxy.com/https://github.com/...` 下回 3 个 ABI 的 `.so`（arm/arm64/x64 的 sha256 见 `sqlite3` 包 `lib/src/hook/asset_hashes.dart`），按 `download-<hash 前8位>` 放回上面缓存目录即可。另外，`pubspec.yaml` 里 `assets/` 目录声明**不包含子目录**——新增 `assets/xxx/` 子目录要显式加 `- assets/xxx/`（如 `assets/assistant_avatars/`），否则打不进包。
 10. **HTML 面板渲染的已知限制**：regex_scripts 产出的面板（微信/论坛/状态栏）由 core 版 `HtmlWidget` 渲染，**非像素级还原**——core 包不支持 `<svg>` 图标（论坛面板的点赞/转发图标显示为空，装饰性）、面板为「响应式堆叠」而非原 flex 布局；远程图 `files.catbox.moe` 在国内 **SSL 握手失败**加载不出（网络问题，非代码 bug，后续方向=导入时离线缓存远程图）。
+11. **PDF 渲染成图走不通**：`pdf_render` 用旧 v1 插件 API（`Registrar`）与 Flutter 3.47 不兼容（`Unresolved reference 'Registrar'`）；`pdfrx` 构建时从 github.com 下载 pdfium（同 sqlite3 原生资产坑，见上面第 9 条）。当前上传 PDF 只显示文件卡片、不读内容；要支持需离线缓存 pdfium 或换直接收 PDF 的多模态 API。
 
 ## 当前进度
 
@@ -179,5 +185,17 @@ lib/
 本轮新增（1.17.13–1.17.17）：带配图角色卡——头像提取（PNG 卡/V3 assets icon/JSON image/Skill avatar）+ 角色图库（schema v19 `imageGalleryJson`，V3 assets emotion/background + risuai.additionalAssets + chub.expressions + Skill 图）+ `<img="名字">` 内嵌图渲染 + SillyTavern regex_scripts（`applyRegexScripts` JS 正则→Dart、`$1` 反向引用）+ `<CG>` 远程图（`Image.network`）+ HTML 完整渲染（`flutter_widget_from_html_core` 的 `HtmlWidget`，对话框/论坛/微信气泡/状态面板全显示）。
 
 本轮新增（1.17.20）：修复带配图角色卡「面板消失」——真根因是 `applyRegexScripts` 忽略 SillyTavern 脚本的 `promptOnly`/`disabled` 标志，prompt-only 删除脚本「删除<TTL>」在落库时删掉了包裹状态栏/微信面板的 `<TTL>` 块；已跳过这两类脚本。同步：HTML 渲染从 WebView（reverse:true 列表条纹/空白被弃用）换成 `flutter_widget_from_html_core` 的 `HtmlWidget`（`buildAsync:false` + `_sanitizeHtml` 中和溢出 CSS）。
+
+本轮新增（1.17.21）：世界书「深度分层」+ 嵌套字段解析——`WorldbookParser` 读条目 `extensions` 子对象（`case_sensitive`/`match_whole_words`/`exclude_recursion`/`probability`/`group`/`priority`）并新增 `depth` 字段，`WorldbookMatcher` 加 `depth` 门控（`constant=true` 的常驻条目也按聊天深度逐步解锁，单聊/群聊/剧情三处注入点传消息总数）；regex prompt 侧清理——`applyRegexScripts`（显示）加 `role` 按 `placement`（1=用户输入/2=AI 输出）区分消息来源，新增 `applyPromptRegexScripts` 在 `_buildRequest` 对历史消息按 `minDepth`/`maxDepth` 门控剥离旧 AI 输出里的 `<TTL>` 块。⚠️ 已导入的卡需**重新导入**才带上 `depth`（parser 只在导入时跑）。
+
+本轮新增（1.17.22–1.17.24）：HTML 面板渲染三连——① **粉色对话框 CSS 内联**（`core/utils/html_sanitize.dart` 抽出 `sanitizeHtml`：把 `<style>` 类 CSS 内联到 `class` 元素、渐变降级为末尾 `#hex` 纯色、`flex`→`block`/`position`→`static`、丢弃 width/height/gap/box-shadow 等溢出属性）；② **显示侧 minDepth 门控**（`applyRegexScripts` 加 `depth`，「微信删除」只删 ≥4 层的旧消息、保留最近 4 条；`chat_screen` 按 `reversed` 下标传 depth）；③ **面板可折叠**（去掉 `sanitizeHtml` 里 `<details>`/`<summary>` 的摊平，`flutter_widget_from_html_core` 原生渲染成折叠面板、默认折叠点标题展开）。顺带修了 markdown 加粗 `**x**`→`<b>` 用 `replaceAll` 的 `$1` 不生效 bug（改 `replaceAllMapped`）。
+
+本轮新增（1.17.25–1.17.28）：P0 三 bug——联系人名字/标签溢出（title 加 `maxLines:1`+ellipsis）、剧情选角色按拼音排序（复用群聊 `pinyinInitial`）、助手世界规则空白（`parseWorldJson` 归一化纯字符串为 `{"text":…}`）；P2 快速 UI——AppBar「转到最早」按钮、多个开场白折叠成「备选开场白（N）」、HTML 面板改 `SelectionArea` 支持拖动选中/复制/撤回、输入框 `maxLines` 4→8、助手回复到 `maxTokens` 自动续写（`finishReason=='length'` 时把已生成段 +「继续」喂回，上限 5 段）。
+
+本轮新增（1.17.29–1.17.32）：翻译进度 + 后台翻译（`translation_controller.dart` 全局非 autoDispose，详情页非阻塞进度条）；外观颜色（用户/角色气泡色 + 用户/角色文本色，全局「我」页 + 每会话，schema v20/v21，`ColorRow`+`showColorPicker` hex 输入）；消息内联文字色（`markdown_text.dart` 的 `_colorizeText` 处理 `<font color>`/`<span style=color>`）。
+
+本轮新增（1.17.33–1.17.36）：聊天上传附件（📎 选图/文件 → 暂存 chip → 输入要求再发）；图片走多模态 `ChatMessage.images` 发给模型识图、文本文件读内容发角色、其他文件显示文件卡片 + 发「收到文件」；PDF 渲染成图未做（见已知问题）。
+
+本轮新增（1.17.37–1.17.38）：助手出卡完成后「为这张卡配图？」弹窗（#19，多选图作封面/头像/图库，修时序竞态——drift watch 送达滞后时短暂重试）；角色卡导出为 PNG 下载/分享（#13，`PngCardWriter` 写 `chara` tEXt chunk + `share_plus`）；HTML 卡创作提示（#16，assistant prompt + `html_sanitize.dart` 抽出 `sanitizeHtml` 供气泡渲染复用）。
 
 未实现（后续阶段）：向量召回、FTS5 全文索引、WorkManager 定时后台任务、故障转移（多 Provider 自动切换）。

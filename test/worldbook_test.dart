@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paracosm/core/db/database.dart';
 import 'package:paracosm/core/import/worldbook_importer.dart';
+import 'package:paracosm/core/import/worldbook_parser.dart';
 import 'package:paracosm/core/world/world_context.dart';
 
 void main() {
@@ -41,6 +42,32 @@ void main() {
     final e = entries.first as Map;
     expect(e['content'], contains('表达风格规则'));
     expect(e['keys'] as List, contains('表达DNA'));
+  });
+
+  test('WorldbookParser reads nested extensions fields + depth', () {
+    final normalized = WorldbookParser().normalize({
+      'name': '书',
+      'entries': [
+        {
+          'keys': [],
+          'content': '内容',
+          'constant': true,
+          'extensions': {
+            'depth': 4,
+            'case_sensitive': true,
+            'match_whole_words': true,
+            'exclude_recursion': true,
+            'priority': 7,
+          },
+        },
+      ],
+    });
+    final entry = (normalized['entries'] as List).first as Map;
+    expect(entry['depth'], 4);
+    expect(entry['case_sensitive'], true);
+    expect(entry['match_whole_words'], true);
+    expect(entry['exclude_recursion'], true);
+    expect(entry['priority'], 7);
   });
 
   test('WorldbookMatcher matches keys + constant, skips disabled', () {

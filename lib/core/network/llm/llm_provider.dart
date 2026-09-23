@@ -10,12 +10,29 @@ enum ProviderType { openaiCompatible, anthropic }
 /// A chat message with a standard role. `system` is only honored by providers
 /// that have a dedicated system slot (Anthropic takes it via [ChatRequest]).
 class ChatMessage {
-  const ChatMessage({required this.role, required this.content});
+  const ChatMessage({
+    required this.role,
+    required this.content,
+    this.images = const [],
+  });
 
   final String role; // user / assistant / system
   final String content;
 
-  Map<String, dynamic> toJson() => {'role': role, 'content': content};
+  /// Base64 data-URL images attached to this message (multimodal input).
+  final List<String> images;
+
+  Map<String, dynamic> toJson() {
+    if (images.isEmpty) return {'role': role, 'content': content};
+    return {
+      'role': role,
+      'content': [
+        {'type': 'text', 'text': content},
+        for (final img in images)
+          {'type': 'image_url', 'image_url': {'url': img}},
+      ],
+    };
+  }
 }
 
 class ChatRequest {

@@ -2102,6 +2102,50 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _bubbleUserColorMeta = const VerificationMeta(
+    'bubbleUserColor',
+  );
+  @override
+  late final GeneratedColumn<String> bubbleUserColor = GeneratedColumn<String>(
+    'bubble_user_color',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bubbleAssistantColorMeta =
+      const VerificationMeta('bubbleAssistantColor');
+  @override
+  late final GeneratedColumn<String> bubbleAssistantColor =
+      GeneratedColumn<String>(
+        'bubble_assistant_color',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _userTextColorMeta = const VerificationMeta(
+    'userTextColor',
+  );
+  @override
+  late final GeneratedColumn<String> userTextColor = GeneratedColumn<String>(
+    'user_text_color',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _assistantTextColorMeta =
+      const VerificationMeta('assistantTextColor');
+  @override
+  late final GeneratedColumn<String> assistantTextColor =
+      GeneratedColumn<String>(
+        'assistant_text_color',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2154,6 +2198,10 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     worldbookIdsJson,
     totalPromptTokens,
     totalCompletionTokens,
+    bubbleUserColor,
+    bubbleAssistantColor,
+    userTextColor,
+    assistantTextColor,
     createdAt,
     updatedAt,
     lastMessageAt,
@@ -2303,6 +2351,42 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         ),
       );
     }
+    if (data.containsKey('bubble_user_color')) {
+      context.handle(
+        _bubbleUserColorMeta,
+        bubbleUserColor.isAcceptableOrUnknown(
+          data['bubble_user_color']!,
+          _bubbleUserColorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bubble_assistant_color')) {
+      context.handle(
+        _bubbleAssistantColorMeta,
+        bubbleAssistantColor.isAcceptableOrUnknown(
+          data['bubble_assistant_color']!,
+          _bubbleAssistantColorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('user_text_color')) {
+      context.handle(
+        _userTextColorMeta,
+        userTextColor.isAcceptableOrUnknown(
+          data['user_text_color']!,
+          _userTextColorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('assistant_text_color')) {
+      context.handle(
+        _assistantTextColorMeta,
+        assistantTextColor.isAcceptableOrUnknown(
+          data['assistant_text_color']!,
+          _assistantTextColorMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2407,6 +2491,22 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.int,
         data['${effectivePrefix}total_completion_tokens'],
       ),
+      bubbleUserColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bubble_user_color'],
+      ),
+      bubbleAssistantColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bubble_assistant_color'],
+      ),
+      userTextColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_text_color'],
+      ),
+      assistantTextColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}assistant_text_color'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -2460,6 +2560,12 @@ class Session extends DataClass implements Insertable<Session> {
   /// 本会话累计消耗的 token（prompt/completion，逐轮累加）。
   final int? totalPromptTokens;
   final int? totalCompletionTokens;
+
+  /// 会话级气泡/文本颜色覆盖（hex 字符串，null = 用全局外观设置）。
+  final String? bubbleUserColor;
+  final String? bubbleAssistantColor;
+  final String? userTextColor;
+  final String? assistantTextColor;
   final int createdAt;
   final int updatedAt;
   final int lastMessageAt;
@@ -2481,6 +2587,10 @@ class Session extends DataClass implements Insertable<Session> {
     this.worldbookIdsJson,
     this.totalPromptTokens,
     this.totalCompletionTokens,
+    this.bubbleUserColor,
+    this.bubbleAssistantColor,
+    this.userTextColor,
+    this.assistantTextColor,
     required this.createdAt,
     required this.updatedAt,
     required this.lastMessageAt,
@@ -2533,6 +2643,18 @@ class Session extends DataClass implements Insertable<Session> {
     if (!nullToAbsent || totalCompletionTokens != null) {
       map['total_completion_tokens'] = Variable<int>(totalCompletionTokens);
     }
+    if (!nullToAbsent || bubbleUserColor != null) {
+      map['bubble_user_color'] = Variable<String>(bubbleUserColor);
+    }
+    if (!nullToAbsent || bubbleAssistantColor != null) {
+      map['bubble_assistant_color'] = Variable<String>(bubbleAssistantColor);
+    }
+    if (!nullToAbsent || userTextColor != null) {
+      map['user_text_color'] = Variable<String>(userTextColor);
+    }
+    if (!nullToAbsent || assistantTextColor != null) {
+      map['assistant_text_color'] = Variable<String>(assistantTextColor);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     map['last_message_at'] = Variable<int>(lastMessageAt);
@@ -2584,6 +2706,18 @@ class Session extends DataClass implements Insertable<Session> {
       totalCompletionTokens: totalCompletionTokens == null && nullToAbsent
           ? const Value.absent()
           : Value(totalCompletionTokens),
+      bubbleUserColor: bubbleUserColor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bubbleUserColor),
+      bubbleAssistantColor: bubbleAssistantColor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bubbleAssistantColor),
+      userTextColor: userTextColor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(userTextColor),
+      assistantTextColor: assistantTextColor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(assistantTextColor),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       lastMessageAt: Value(lastMessageAt),
@@ -2617,6 +2751,14 @@ class Session extends DataClass implements Insertable<Session> {
       totalCompletionTokens: serializer.fromJson<int?>(
         json['totalCompletionTokens'],
       ),
+      bubbleUserColor: serializer.fromJson<String?>(json['bubbleUserColor']),
+      bubbleAssistantColor: serializer.fromJson<String?>(
+        json['bubbleAssistantColor'],
+      ),
+      userTextColor: serializer.fromJson<String?>(json['userTextColor']),
+      assistantTextColor: serializer.fromJson<String?>(
+        json['assistantTextColor'],
+      ),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       lastMessageAt: serializer.fromJson<int>(json['lastMessageAt']),
@@ -2643,6 +2785,10 @@ class Session extends DataClass implements Insertable<Session> {
       'worldbookIdsJson': serializer.toJson<String?>(worldbookIdsJson),
       'totalPromptTokens': serializer.toJson<int?>(totalPromptTokens),
       'totalCompletionTokens': serializer.toJson<int?>(totalCompletionTokens),
+      'bubbleUserColor': serializer.toJson<String?>(bubbleUserColor),
+      'bubbleAssistantColor': serializer.toJson<String?>(bubbleAssistantColor),
+      'userTextColor': serializer.toJson<String?>(userTextColor),
+      'assistantTextColor': serializer.toJson<String?>(assistantTextColor),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'lastMessageAt': serializer.toJson<int>(lastMessageAt),
@@ -2667,6 +2813,10 @@ class Session extends DataClass implements Insertable<Session> {
     Value<String?> worldbookIdsJson = const Value.absent(),
     Value<int?> totalPromptTokens = const Value.absent(),
     Value<int?> totalCompletionTokens = const Value.absent(),
+    Value<String?> bubbleUserColor = const Value.absent(),
+    Value<String?> bubbleAssistantColor = const Value.absent(),
+    Value<String?> userTextColor = const Value.absent(),
+    Value<String?> assistantTextColor = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     int? lastMessageAt,
@@ -2700,6 +2850,18 @@ class Session extends DataClass implements Insertable<Session> {
     totalCompletionTokens: totalCompletionTokens.present
         ? totalCompletionTokens.value
         : this.totalCompletionTokens,
+    bubbleUserColor: bubbleUserColor.present
+        ? bubbleUserColor.value
+        : this.bubbleUserColor,
+    bubbleAssistantColor: bubbleAssistantColor.present
+        ? bubbleAssistantColor.value
+        : this.bubbleAssistantColor,
+    userTextColor: userTextColor.present
+        ? userTextColor.value
+        : this.userTextColor,
+    assistantTextColor: assistantTextColor.present
+        ? assistantTextColor.value
+        : this.assistantTextColor,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -2745,6 +2907,18 @@ class Session extends DataClass implements Insertable<Session> {
       totalCompletionTokens: data.totalCompletionTokens.present
           ? data.totalCompletionTokens.value
           : this.totalCompletionTokens,
+      bubbleUserColor: data.bubbleUserColor.present
+          ? data.bubbleUserColor.value
+          : this.bubbleUserColor,
+      bubbleAssistantColor: data.bubbleAssistantColor.present
+          ? data.bubbleAssistantColor.value
+          : this.bubbleAssistantColor,
+      userTextColor: data.userTextColor.present
+          ? data.userTextColor.value
+          : this.userTextColor,
+      assistantTextColor: data.assistantTextColor.present
+          ? data.assistantTextColor.value
+          : this.assistantTextColor,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       lastMessageAt: data.lastMessageAt.present
@@ -2773,6 +2947,10 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('worldbookIdsJson: $worldbookIdsJson, ')
           ..write('totalPromptTokens: $totalPromptTokens, ')
           ..write('totalCompletionTokens: $totalCompletionTokens, ')
+          ..write('bubbleUserColor: $bubbleUserColor, ')
+          ..write('bubbleAssistantColor: $bubbleAssistantColor, ')
+          ..write('userTextColor: $userTextColor, ')
+          ..write('assistantTextColor: $assistantTextColor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessageAt: $lastMessageAt')
@@ -2781,7 +2959,7 @@ class Session extends DataClass implements Insertable<Session> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     characterId,
     worldId,
@@ -2799,10 +2977,14 @@ class Session extends DataClass implements Insertable<Session> {
     worldbookIdsJson,
     totalPromptTokens,
     totalCompletionTokens,
+    bubbleUserColor,
+    bubbleAssistantColor,
+    userTextColor,
+    assistantTextColor,
     createdAt,
     updatedAt,
     lastMessageAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2824,6 +3006,10 @@ class Session extends DataClass implements Insertable<Session> {
           other.worldbookIdsJson == this.worldbookIdsJson &&
           other.totalPromptTokens == this.totalPromptTokens &&
           other.totalCompletionTokens == this.totalCompletionTokens &&
+          other.bubbleUserColor == this.bubbleUserColor &&
+          other.bubbleAssistantColor == this.bubbleAssistantColor &&
+          other.userTextColor == this.userTextColor &&
+          other.assistantTextColor == this.assistantTextColor &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.lastMessageAt == this.lastMessageAt);
@@ -2847,6 +3033,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<String?> worldbookIdsJson;
   final Value<int?> totalPromptTokens;
   final Value<int?> totalCompletionTokens;
+  final Value<String?> bubbleUserColor;
+  final Value<String?> bubbleAssistantColor;
+  final Value<String?> userTextColor;
+  final Value<String?> assistantTextColor;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> lastMessageAt;
@@ -2869,6 +3059,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.worldbookIdsJson = const Value.absent(),
     this.totalPromptTokens = const Value.absent(),
     this.totalCompletionTokens = const Value.absent(),
+    this.bubbleUserColor = const Value.absent(),
+    this.bubbleAssistantColor = const Value.absent(),
+    this.userTextColor = const Value.absent(),
+    this.assistantTextColor = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastMessageAt = const Value.absent(),
@@ -2892,6 +3086,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.worldbookIdsJson = const Value.absent(),
     this.totalPromptTokens = const Value.absent(),
     this.totalCompletionTokens = const Value.absent(),
+    this.bubbleUserColor = const Value.absent(),
+    this.bubbleAssistantColor = const Value.absent(),
+    this.userTextColor = const Value.absent(),
+    this.assistantTextColor = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     required int lastMessageAt,
@@ -2919,6 +3117,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<String>? worldbookIdsJson,
     Expression<int>? totalPromptTokens,
     Expression<int>? totalCompletionTokens,
+    Expression<String>? bubbleUserColor,
+    Expression<String>? bubbleAssistantColor,
+    Expression<String>? userTextColor,
+    Expression<String>? assistantTextColor,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? lastMessageAt,
@@ -2944,6 +3146,12 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       if (totalPromptTokens != null) 'total_prompt_tokens': totalPromptTokens,
       if (totalCompletionTokens != null)
         'total_completion_tokens': totalCompletionTokens,
+      if (bubbleUserColor != null) 'bubble_user_color': bubbleUserColor,
+      if (bubbleAssistantColor != null)
+        'bubble_assistant_color': bubbleAssistantColor,
+      if (userTextColor != null) 'user_text_color': userTextColor,
+      if (assistantTextColor != null)
+        'assistant_text_color': assistantTextColor,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastMessageAt != null) 'last_message_at': lastMessageAt,
@@ -2969,6 +3177,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Value<String?>? worldbookIdsJson,
     Value<int?>? totalPromptTokens,
     Value<int?>? totalCompletionTokens,
+    Value<String?>? bubbleUserColor,
+    Value<String?>? bubbleAssistantColor,
+    Value<String?>? userTextColor,
+    Value<String?>? assistantTextColor,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? lastMessageAt,
@@ -2993,6 +3205,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       totalPromptTokens: totalPromptTokens ?? this.totalPromptTokens,
       totalCompletionTokens:
           totalCompletionTokens ?? this.totalCompletionTokens,
+      bubbleUserColor: bubbleUserColor ?? this.bubbleUserColor,
+      bubbleAssistantColor: bubbleAssistantColor ?? this.bubbleAssistantColor,
+      userTextColor: userTextColor ?? this.userTextColor,
+      assistantTextColor: assistantTextColor ?? this.assistantTextColor,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -3056,6 +3272,20 @@ class SessionsCompanion extends UpdateCompanion<Session> {
         totalCompletionTokens.value,
       );
     }
+    if (bubbleUserColor.present) {
+      map['bubble_user_color'] = Variable<String>(bubbleUserColor.value);
+    }
+    if (bubbleAssistantColor.present) {
+      map['bubble_assistant_color'] = Variable<String>(
+        bubbleAssistantColor.value,
+      );
+    }
+    if (userTextColor.present) {
+      map['user_text_color'] = Variable<String>(userTextColor.value);
+    }
+    if (assistantTextColor.present) {
+      map['assistant_text_color'] = Variable<String>(assistantTextColor.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -3091,6 +3321,10 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('worldbookIdsJson: $worldbookIdsJson, ')
           ..write('totalPromptTokens: $totalPromptTokens, ')
           ..write('totalCompletionTokens: $totalCompletionTokens, ')
+          ..write('bubbleUserColor: $bubbleUserColor, ')
+          ..write('bubbleAssistantColor: $bubbleAssistantColor, ')
+          ..write('userTextColor: $userTextColor, ')
+          ..write('assistantTextColor: $assistantTextColor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessageAt: $lastMessageAt, ')
@@ -15313,6 +15547,10 @@ typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
   Value<String?> worldbookIdsJson,
   Value<int?> totalPromptTokens,
   Value<int?> totalCompletionTokens,
+  Value<String?> bubbleUserColor,
+  Value<String?> bubbleAssistantColor,
+  Value<String?> userTextColor,
+  Value<String?> assistantTextColor,
   required int createdAt,
   required int updatedAt,
   required int lastMessageAt,
@@ -15336,6 +15574,10 @@ typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<String?> worldbookIdsJson,
   Value<int?> totalPromptTokens,
   Value<int?> totalCompletionTokens,
+  Value<String?> bubbleUserColor,
+  Value<String?> bubbleAssistantColor,
+  Value<String?> userTextColor,
+  Value<String?> assistantTextColor,
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int> lastMessageAt,
@@ -15487,6 +15729,26 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<int> get totalCompletionTokens => $composableBuilder(
     column: $table.totalCompletionTokens,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bubbleUserColor => $composableBuilder(
+    column: $table.bubbleUserColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bubbleAssistantColor => $composableBuilder(
+    column: $table.bubbleAssistantColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userTextColor => $composableBuilder(
+    column: $table.userTextColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assistantTextColor => $composableBuilder(
+    column: $table.assistantTextColor,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15668,6 +15930,26 @@ class $$SessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get bubbleUserColor => $composableBuilder(
+    column: $table.bubbleUserColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bubbleAssistantColor => $composableBuilder(
+    column: $table.bubbleAssistantColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userTextColor => $composableBuilder(
+    column: $table.userTextColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assistantTextColor => $composableBuilder(
+    column: $table.assistantTextColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -15781,6 +16063,26 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<int> get totalCompletionTokens => $composableBuilder(
     column: $table.totalCompletionTokens,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get bubbleUserColor => $composableBuilder(
+    column: $table.bubbleUserColor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get bubbleAssistantColor => $composableBuilder(
+    column: $table.bubbleAssistantColor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get userTextColor => $composableBuilder(
+    column: $table.userTextColor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get assistantTextColor => $composableBuilder(
+    column: $table.assistantTextColor,
     builder: (column) => column,
   );
 
@@ -15918,6 +16220,10 @@ class $$SessionsTableTableManager
                 Value<String?> worldbookIdsJson = const Value.absent(),
                 Value<int?> totalPromptTokens = const Value.absent(),
                 Value<int?> totalCompletionTokens = const Value.absent(),
+                Value<String?> bubbleUserColor = const Value.absent(),
+                Value<String?> bubbleAssistantColor = const Value.absent(),
+                Value<String?> userTextColor = const Value.absent(),
+                Value<String?> assistantTextColor = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> lastMessageAt = const Value.absent(),
@@ -15940,6 +16246,10 @@ class $$SessionsTableTableManager
                 worldbookIdsJson: worldbookIdsJson,
                 totalPromptTokens: totalPromptTokens,
                 totalCompletionTokens: totalCompletionTokens,
+                bubbleUserColor: bubbleUserColor,
+                bubbleAssistantColor: bubbleAssistantColor,
+                userTextColor: userTextColor,
+                assistantTextColor: assistantTextColor,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessageAt: lastMessageAt,
@@ -15964,6 +16274,10 @@ class $$SessionsTableTableManager
                 Value<String?> worldbookIdsJson = const Value.absent(),
                 Value<int?> totalPromptTokens = const Value.absent(),
                 Value<int?> totalCompletionTokens = const Value.absent(),
+                Value<String?> bubbleUserColor = const Value.absent(),
+                Value<String?> bubbleAssistantColor = const Value.absent(),
+                Value<String?> userTextColor = const Value.absent(),
+                Value<String?> assistantTextColor = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 required int lastMessageAt,
@@ -15986,6 +16300,10 @@ class $$SessionsTableTableManager
                 worldbookIdsJson: worldbookIdsJson,
                 totalPromptTokens: totalPromptTokens,
                 totalCompletionTokens: totalCompletionTokens,
+                bubbleUserColor: bubbleUserColor,
+                bubbleAssistantColor: bubbleAssistantColor,
+                userTextColor: userTextColor,
+                assistantTextColor: assistantTextColor,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessageAt: lastMessageAt,

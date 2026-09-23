@@ -206,6 +206,18 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
             // Character image gallery (expressions/backgrounds, JSON manifest).
             await m.addColumn(characters, characters.imageGalleryJson);
           }
+          if (from < 20) {
+            // Per-session bubble/text color overrides (hex strings; null = global).
+            await m.addColumn(sessions, sessions.bubbleUserColor);
+            await m.addColumn(sessions, sessions.bubbleAssistantColor);
+            await m.addColumn(sessions, sessions.userTextColor);
+            await m.addColumn(sessions, sessions.assistantTextColor);
+          }
+          if (from < 21) {
+            // Text color split per-role (user/assistant) instead of one column.
+            await m.addColumn(sessions, sessions.userTextColor);
+            await m.addColumn(sessions, sessions.assistantTextColor);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -1278,6 +1290,9 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
         ..where((t) => t.key.equals(key)))
       .watchSingleOrNull()
       .map((s) => s?.value);
+
+  Stream<Session?> watchSession(String id) =>
+      (select(sessions)..where((t) => t.id.equals(id))).watchSingleOrNull();
 }
 
 /// Session joined with its character name for list display.

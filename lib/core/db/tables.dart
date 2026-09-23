@@ -119,6 +119,12 @@ class Sessions extends Table {
   IntColumn get totalPromptTokens => integer().nullable()();
   IntColumn get totalCompletionTokens => integer().nullable()();
 
+  /// 会话级气泡/文本颜色覆盖（hex 字符串，null = 用全局外观设置）。
+  TextColumn get bubbleUserColor => text().nullable()();
+  TextColumn get bubbleAssistantColor => text().nullable()();
+  TextColumn get userTextColor => text().nullable()();
+  TextColumn get assistantTextColor => text().nullable()();
+
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   IntColumn get lastMessageAt => integer()();

@@ -1,8 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
+import '../../../core/widgets/color_field.dart';
 import 'chat_controller.dart';
 
 final sessionsProvider = StreamProvider<List<SessionWithCharacter>>((ref) {
@@ -69,5 +71,54 @@ final sessionTokensProvider = FutureProvider.family<
   return (
     promptTokens: session.totalPromptTokens ?? 0,
     completionTokens: session.totalCompletionTokens ?? 0,
+  );
+});
+
+/// The raw [Session] row, watched so per-session color overrides reflect.
+final sessionProvider = StreamProvider.family<Session?, String>(
+  (ref, sessionId) => ref.watch(dbProvider).watchSession(sessionId),
+);
+
+/// Global appearance settings (Settings table keys).
+final userBubbleColorSettingProvider = StreamProvider<String?>(
+    (ref) => ref.watch(dbProvider).watchSetting('chat_user_bubble_color'));
+final assistantBubbleColorSettingProvider = StreamProvider<String?>(
+    (ref) => ref.watch(dbProvider).watchSetting('chat_assistant_bubble_color'));
+final userTextColorSettingProvider = StreamProvider<String?>(
+    (ref) => ref.watch(dbProvider).watchSetting('chat_user_text_color'));
+final assistantTextColorSettingProvider = StreamProvider<String?>(
+    (ref) => ref.watch(dbProvider).watchSetting('chat_assistant_text_color'));
+
+/// Resolved bubble/text colors for a session: session override → global
+/// setting → null (theme default).
+class ChatColors {
+  const ChatColors({
+    this.userBubble,
+    this.assistantBubble,
+    this.userText,
+    this.assistantText,
+  });
+
+  final Color? userBubble;
+  final Color? assistantBubble;
+  final Color? userText;
+  final Color? assistantText;
+}
+
+final chatColorsProvider = Provider.family<ChatColors, String>((ref, sessionId) {
+  final session = ref.watch(sessionProvider(sessionId)).value;
+  final userBubble = session?.bubbleUserColor ??
+      ref.watch(userBubbleColorSettingProvider).value;
+  final assistantBubble = session?.bubbleAssistantColor ??
+      ref.watch(assistantBubbleColorSettingProvider).value;
+  final userText =
+      session?.userTextColor ?? ref.watch(userTextColorSettingProvider).value;
+  final assistantText = session?.assistantTextColor ??
+      ref.watch(assistantTextColorSettingProvider).value;
+  return ChatColors(
+    userBubble: parseHexColor(userBubble),
+    assistantBubble: parseHexColor(assistantBubble),
+    userText: parseHexColor(userText),
+    assistantText: parseHexColor(assistantText),
   );
 });

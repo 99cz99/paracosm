@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/widgets.dart';
@@ -16,6 +17,7 @@ import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/app_exception.dart';
 import '../../../core/utils/prompt_template.dart';
+import '../../../core/utils/regex_scripts.dart';
 import '../../../core/world/world_context.dart';
 import '../data/memory_service.dart';
 
@@ -135,23 +137,124 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     ));
     await db.touchSession(sessionId, now);
 
-    // 2. Load the session to pick its API + sampling params.
+    await _runReply(sessionId);
+  }
+
+  /// Persists uploaded attachments (images → shown + sent to the model
+  /// multimodally; files → shown only) plus an optional text caption, then
+  /// triggers one reply turn if there's anything for the model to respond to.
+  Future<void> sendAttachments(
+    String sessionId, {
+    List<String> images = const [],
+    List<({String path, String name})> files = const [],
+    String? caption,
+  }) async {
+    if (_streams[sessionId]?.isGenerating == true) return;
+    final cap = caption?.trim();
+    if (images.isEmpty && files.isEmpty && (cap == null || cap.isEmpty)) {
+      return;
+    }
+    final db = ref.read(dbProvider);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final img in images) {
+      final idx = await db.nextOrderIndex(sessionId);
+      await db.insertMessage(MessagesCompanion.insert(
+        id: _uuid.v4(),
+        sessionId: sessionId,
+        role: 'user',
+        content: img,
+        orderIndex: idx,
+        timestamp: now,
+        type: const Value('image'),
+        visibleToAi: const Value(true),
+      ));
+    }
+    final fileTexts = <String>[];
+    final fileNotes = <String>[];
+    for (final f in files) {
+      final idx = await db.nextOrderIndex(sessionId);
+      await db.insertMessage(MessagesCompanion.insert(
+        id: _uuid.v4(),
+        sessionId: sessionId,
+        role: 'user',
+        content: f.path,
+        orderIndex: idx,
+        timestamp: now,
+        type: const Value('file'),
+        visibleToAi: const Value(false),
+        metadata: Value(jsonEncode({'filename': f.name})),
+      ));
+      final text = await _readTextFile(f.path);
+      if (text != null) {
+        fileTexts.add('（用户上传了文件：${f.name}）\n\n$text');
+      } else {
+        fileNotes.add(f.name);
+      }
+    }
+    if (fileTexts.isNotEmpty) {
+      final idx = await db.nextOrderIndex(sessionId);
+      await db.insertMessage(MessagesCompanion.insert(
+        id: _uuid.v4(),
+        sessionId: sessionId,
+        role: 'user',
+        content: fileTexts.join('\n\n'),
+        orderIndex: idx,
+        timestamp: now,
+      ));
+    }
+    if (fileNotes.isNotEmpty) {
+      final idx = await db.nextOrderIndex(sessionId);
+      await db.insertMessage(MessagesCompanion.insert(
+        id: _uuid.v4(),
+        sessionId: sessionId,
+        role: 'user',
+        content: '（用户上传了文件：${fileNotes.join('、')}）',
+        orderIndex: idx,
+        timestamp: now,
+      ));
+    }
+    if (cap != null && cap.isNotEmpty) {
+      final idx = await db.nextOrderIndex(sessionId);
+      await db.insertMessage(MessagesCompanion.insert(
+        id: _uuid.v4(),
+        sessionId: sessionId,
+        role: 'user',
+        content: cap,
+        orderIndex: idx,
+        timestamp: now,
+      ));
+    }
+    await db.touchSession(sessionId, now);
+    if (images.isNotEmpty ||
+        (cap != null && cap.isNotEmpty) ||
+        fileTexts.isNotEmpty ||
+        fileNotes.isNotEmpty) {
+      await _runReply(sessionId);
+    }
+  }
+
+  /// Resolves the provider and streams the reply for a freshly-persisted user
+  /// turn (text or image).
+  Future<void> _runReply(String sessionId) async {
+    final db = ref.read(dbProvider);
+
+    // 1. Load the session to pick its API + sampling params.
     final session = await db.getSession(sessionId);
     if (session == null) {
       throw AppException('会话不存在');
     }
 
-    // 3. Resolve the provider (per-session override, else default).
+    // 2. Resolve the provider (per-session override, else default).
     final config = await resolveProvider(db, ref.read(secureKeyStoreProvider),
         providerId: session.providerId);
     if (config == null) {
       throw AppException('请先在「我」中配置 API Provider');
     }
 
-    // 4. Build the request from the session's character + history.
+    // 3. Build the request from the session's character + history.
     final request = await _buildRequest(db, session);
 
-    // 5. Stream and accumulate in a per-session slot so other single chats can
+    // 4. Stream and accumulate in a per-session slot so other single chats can
     // keep generating concurrently.
     final stream = _streams.putIfAbsent(sessionId, _SessionStream.new);
     stream.isGenerating = true;
@@ -164,48 +267,84 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     String? finishReason;
     int? promptTokens;
     int? completionTokens;
+    // Auto-continue: when the model stops because it hit maxTokens
+    // (finishReason == 'length'), feed the partial reply back + a "continue"
+    // nudge and keep generating, so long replies aren't truncated.
+    var messages = request.messages;
+    const maxContinues = 5;
+    var continues = 0;
     try {
-      try {
-        await for (final chunk in provider.streamChat(request)) {
-          if (chunk.finishReason != null) finishReason = chunk.finishReason;
-          if (chunk.promptTokens != null) promptTokens = chunk.promptTokens;
-          if (chunk.completionTokens != null) {
-            completionTokens = chunk.completionTokens;
-          }
-          final delta = chunk.textDelta;
-          if (delta != null && delta.isNotEmpty) {
-            stream.buffer.write(delta);
-            _setStream(sessionId,
-                text: stream.buffer.toString(), isGenerating: true);
-          }
-        }
-      } catch (e) {
-        _clearStream(sessionId);
-        if (stream.cancelling) return;
-        if (stream.buffer.isNotEmpty) {
-          // Stream interrupted mid-reply (e.g. network dropped) — persist the
-          // partial text so it isn't lost, then stop quietly.
-          try {
-            if (await db.getSession(sessionId) != null) {
-              await _persistAssistant(
-                db,
-                sessionId,
-                stream.buffer.toString(),
-                promptTokens: promptTokens,
-                completionTokens: completionTokens,
-                model: config.model,
-              );
+      while (true) {
+        final req = ChatRequest(
+          messages: messages,
+          systemPrompt: request.systemPrompt,
+          temperature: request.temperature,
+          topP: request.topP,
+          maxTokens: request.maxTokens,
+          presencePenalty: request.presencePenalty,
+          frequencyPenalty: request.frequencyPenalty,
+        );
+        final segmentStart = stream.buffer.length;
+        finishReason = null;
+        try {
+          await for (final chunk in provider.streamChat(req)) {
+            if (chunk.finishReason != null) finishReason = chunk.finishReason;
+            if (chunk.promptTokens != null) {
+              promptTokens = (promptTokens ?? 0) + chunk.promptTokens!;
             }
-          } catch (_) {}
-          return;
+            if (chunk.completionTokens != null) {
+              completionTokens = (completionTokens ?? 0) + chunk.completionTokens!;
+            }
+            final delta = chunk.textDelta;
+            if (delta != null && delta.isNotEmpty) {
+              stream.buffer.write(delta);
+              _setStream(sessionId,
+                  text: stream.buffer.toString(), isGenerating: true);
+            }
+          }
+        } catch (e) {
+          _clearStream(sessionId);
+          if (stream.cancelling) return;
+          if (stream.buffer.isNotEmpty) {
+            // Stream interrupted mid-reply (e.g. network dropped) — persist the
+            // partial text so it isn't lost, then stop quietly.
+            try {
+              if (await db.getSession(sessionId) != null) {
+                await _persistAssistant(
+                  db,
+                  sessionId,
+                  stream.buffer.toString(),
+                  promptTokens: promptTokens,
+                  completionTokens: completionTokens,
+                  model: config.model,
+                );
+              }
+            } catch (_) {}
+            return;
+          }
+          rethrow;
         }
-        rethrow;
+
+        if (stream.cancelling) return;
+
+        final truncated =
+            finishReason == 'length' || finishReason == 'max_tokens';
+        final segment = stream.buffer.toString().substring(segmentStart);
+        if (truncated && segment.isNotEmpty && continues < maxContinues) {
+          messages = [
+            ...messages,
+            ChatMessage(role: 'assistant', content: segment),
+            ChatMessage(role: 'user', content: '（继续输出，直接接上文，不要重复）'),
+          ];
+          continues++;
+          continue;
+        }
+        break;
       }
 
       // Normal completion. Persist before clearing the streaming state so the
       // reply lands in the list before the streaming bubble is dropped — avoids
       // a one-frame flicker.
-      if (stream.cancelling) return; // don't persist a cancelled partial reply
       if (stream.buffer.isEmpty) {
         _clearStream(sessionId);
         throw AppException(
@@ -365,11 +504,35 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
       start++;
     }
 
+    // Prompt-side regex cleanup (e.g. strip `<TTL>` status/WeChat panels from
+    // old AI replies) before the history reaches the model. Depth is counted
+    // from the newest message (0 = last) so `minDepth` gates older messages.
+    final character = await db.getCharacter(session.characterId);
+    final scripts = _parseRegexScripts(character);
+    final messages = <ChatMessage>[];
+    for (var i = start; i < history.length; i++) {
+      final m = history[i];
+      final depth = history.length - 1 - i;
+      if (m.type == 'image') {
+        final dataUrl = await _imageDataUrl(m.content);
+        if (dataUrl != null) {
+          messages.add(ChatMessage(
+            role: 'user',
+            content: '（用户发送了一张图片）',
+            images: [dataUrl],
+          ));
+        }
+        continue;
+      }
+      final content = (m.role == 'user' || m.role == 'assistant')
+          ? applyPromptRegexScripts(scripts, m.content,
+              role: m.role, depth: depth)
+          : m.content;
+      messages.add(ChatMessage(role: m.role, content: content));
+    }
+
     return ChatRequest(
-      messages: history
-          .sublist(start)
-          .map((m) => ChatMessage(role: m.role, content: m.content))
-          .toList(),
+      messages: messages,
       systemPrompt: systemPrompt,
       temperature: session.temperature ?? 1.2,
       topP: session.topP ?? 1.0,
@@ -425,7 +588,13 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
         skipRelation:
             character != null && MemoryService.hasSkillGrowth(character),
       ),
-      ...await _worldSections(db, session, character, history),
+      ...await _worldSections(
+        db,
+        session,
+        character,
+        history,
+        depth: allMessages.length,
+      ),
     ];
 
     // Replace {{char}}/{{user}} placeholders across all injected text.
@@ -488,6 +657,67 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     return const {};
   }
 
+  /// Parses a character's `core['regex_scripts']` into the script list used by
+  /// [applyPromptRegexScripts] (prompt cleanup) / [applyRegexScripts] (display).
+  List<Map<String, dynamic>> _parseRegexScripts(Character? c) {
+    try {
+      final decoded = c == null ? null : jsonDecode(c.corePersonaJson);
+      final scripts = decoded is Map ? decoded['regex_scripts'] : null;
+      return scripts is List
+          ? [
+              for (final s in scripts)
+                if (s is Map) Map<String, dynamic>.from(s),
+            ]
+          : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Reads an image file as a base64 data URL for multimodal input; null when
+  /// the file can't be read.
+  Future<String?> _imageDataUrl(String path) async {
+    try {
+      final bytes = await File(path).readAsBytes();
+      return 'data:${_mimeOf(path)};base64,${base64Encode(bytes)}';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _mimeOf(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.bmp')) return 'image/bmp';
+    return 'image/jpeg';
+  }
+
+  static const Set<String> _textExtensions = {
+    '.txt', '.md', '.markdown', '.json', '.csv', '.log', '.yaml', '.yml',
+    '.xml', '.html', '.htm', '.js', '.ts', '.py', '.dart', '.java', '.c',
+    '.cpp', '.h', '.sh', '.bat', '.ini', '.cfg', '.conf',
+  };
+
+  /// Reads a text file's content for the model (null when it's not a text
+  /// file, is binary, or can't be read). Long files are truncated.
+  Future<String?> _readTextFile(String path) async {
+    final lower = path.toLowerCase();
+    final ext =
+        lower.contains('.') ? lower.substring(lower.lastIndexOf('.')) : '';
+    if (!_textExtensions.contains(ext)) return null;
+    try {
+      final bytes = await File(path).readAsBytes();
+      if (bytes.contains(0)) return null; // binary
+      final text = utf8.decode(bytes, allowMalformed: true).trim();
+      if (text.isEmpty) return null;
+      return text.length > 8000 ? text.substring(0, 8000) : text;
+    } catch (_) {
+      return null;
+    }
+  }
+
   List<PromptSection> _memorySections(
     CharacterMemory? memory,
     CharacterRelation? relation, {
@@ -520,8 +750,9 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     AppDatabase db,
     Session session,
     Character? character,
-    List<Message> history,
-  ) async {
+    List<Message> history, {
+    required int depth,
+  }) async {
     final worldbookIds = session.worldbookIdsJson != null
         ? _parseWorldbookIds(session.worldbookIdsJson!)
         : character == null
@@ -541,8 +772,9 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     // library/world books (same entry can trigger from both).
     final entries = <String>{
       if (character != null)
-        ...WorldbookMatcher.triggered(character.worldbookJson, recentContext),
-      ...worldCtx.matchedEntries(recentContext),
+        ...WorldbookMatcher.triggered(character.worldbookJson, recentContext,
+            depth: depth),
+      ...worldCtx.matchedEntries(recentContext, depth: depth),
     }.toList();
     final worldbookSection =
         entries.isEmpty ? '' : '【世界书】\n${entries.join('\n\n')}';

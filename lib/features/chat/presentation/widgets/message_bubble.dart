@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../contacts/presentation/widgets/character_avatar.dart';
+import '../../../../core/utils/html_sanitize.dart';
 import '../../../../core/utils/regex_scripts.dart';
 import '../../../../core/widgets/markdown_text.dart';
 
@@ -13,6 +16,7 @@ class MessageBubble extends StatelessWidget {
     required this.role,
     required this.content,
     this.type,
+    this.metadata,
     this.isStreaming = false,
     this.avatarName,
     this.avatarPath,
@@ -20,11 +24,17 @@ class MessageBubble extends StatelessWidget {
     this.onRecall,
     this.imagePaths = const {},
     this.regexScripts = const [],
+    this.depth,
+    this.bubbleColor,
+    this.textColor,
   });
 
   final String role;
   final String content;
   final String? type;
+
+  /// Message metadata JSON (e.g. `{filename}` for file attachments).
+  final String? metadata;
   final bool isStreaming;
   final String? avatarName;
   final String? avatarPath;
@@ -36,6 +46,18 @@ class MessageBubble extends StatelessWidget {
 
   /// SillyTavern regex scripts applied to the displayed content.
   final List<Map<String, dynamic>> regexScripts;
+
+  /// Distance from the newest message (0 = newest), gating scripts that carry
+  /// `minDepth`/`maxDepth` (e.g. a display-side deletion that only clears old
+  /// messages). Null disables gating (e.g. in previews / static contexts).
+  final int? depth;
+
+  /// Bubble background color override; null falls back to the theme's
+  /// user/assistant container color.
+  final Color? bubbleColor;
+
+  /// Message text color override; null falls back to the inherited text style.
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context) {
@@ -50,26 +72,38 @@ class MessageBubble extends StatelessWidget {
       return _buildImage(context);
     }
 
+    // File attachments render a filename card (no image preview).
+    if (type == 'file') {
+      return _buildFile(context);
+    }
+
     final isUser = role == 'user';
     final scheme = Theme.of(context).colorScheme;
+
+    Widget body = (isStreaming && content.isEmpty)
+        ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : _buildBody(context);
+    if (textColor != null) {
+      body = DefaultTextStyle(
+        style: DefaultTextStyle.of(context).style.copyWith(color: textColor),
+        child: body,
+      );
+    }
 
     final bubble = Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
       constraints: const BoxConstraints(maxWidth: 320),
       decoration: BoxDecoration(
-        color: isUser
-            ? scheme.primaryContainer
-            : scheme.surfaceContainerHighest,
+        color: bubbleColor ??
+            (isUser ? scheme.primaryContainer : scheme.surfaceContainerHighest),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: (isStreaming && content.isEmpty)
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : _buildBody(context),
+      child: body,
     );
 
     if (isUser) {
@@ -100,13 +134,14 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildBody(BuildContext context) {
-    final processed = applyRegexScripts(regexScripts, content);
+    final processed =
+        applyRegexScripts(regexScripts, content, role: role, depth: depth);
     if (_hasHtml(processed)) {
       return _buildHtml(context, processed);
     }
     if (!processed.contains('<img')) {
       return MarkdownSelectableText(
-        _stripHtml(processed),
+        _stripHtmlKeepColor(processed),
         contextMenuBuilder: _recallMenu(),
       );
     }
@@ -122,7 +157,7 @@ class MessageBubble extends StatelessWidget {
             _remoteImage(s.remote!)
           else if (s.text.trim().isNotEmpty)
             MarkdownSelectableText(
-              _stripHtml(s.text).trim(),
+              _stripHtmlKeepColor(s.text).trim(),
               contextMenuBuilder: _recallMenu(),
             ),
       ],
@@ -167,7 +202,10 @@ class MessageBubble extends StatelessWidget {
     return out;
   }
 
-  String _stripHtml(String s) => s.replaceAll(RegExp(r'<[^>]+>'), '');
+  /// Strips HTML tags but keeps `<font>`/`<span>` color tags so inline text
+  /// colors (from the card/model) reach the markdown renderer.
+  String _stripHtmlKeepColor(String s) =>
+      s.replaceAll(RegExp(r'<(?!\/?(font|span)\b)[^>]+>'), '');
 
   bool _hasHtml(String s) =>
       RegExp(r'<(div|style|details|summary|p|body|span|section)[\s>]')
@@ -175,47 +213,32 @@ class MessageBubble extends StatelessWidget {
       RegExp(r'<img\s').hasMatch(s);
 
   Widget _buildHtml(BuildContext context, String html) {
-    return _HtmlView(
-      html: _sanitizeHtml(html),
-      textStyle: DefaultTextStyle.of(context).style,
+    return SelectionArea(
+      contextMenuBuilder: onRecall == null ? null : _htmlSelectionMenu,
+      child: _HtmlView(
+        html: sanitizeHtml(html),
+        textStyle: DefaultTextStyle.of(context).style,
+      ),
     );
   }
 
-  /// Makes regex-script HTML palatable to the renderer (which only honours
-  /// inline `style=""` and renders `<details>` as a collapsed section).
-  String _sanitizeHtml(String html) {
-    var s = html;
-    // 1. Drop <style>/<script> blocks — class CSS isn't supported.
-    s = s.replaceAll(
-        RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '');
-    s = s.replaceAll(
-        RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '');
-    // 2. Flatten <details>/<summary> into an always-visible <b> header + div.
-    s = s.replaceAll(RegExp(r'<details[^>]*>', caseSensitive: false), '<div>');
-    s = s.replaceAll(RegExp(r'</details>', caseSensitive: false), '</div>');
-    s = s.replaceAll(RegExp(r'<summary[^>]*>', caseSensitive: false), '<b>');
-    s = s.replaceAll(RegExp(r'</summary>', caseSensitive: false), '</b><br>');
-    // 3. Drop the ">body" blockquote artifact (a stray <body> tag after ">").
-    s = s.replaceAll(RegExp(r'><body>', caseSensitive: false), '');
-    s = s.replaceAll(RegExp(r'</body>', caseSensitive: false), '');
-    // 4. Markdown bold → <b> (keeps the emphasis, doesn't touch literal "**").
-    s = s.replaceAll(RegExp(r'\*\*([^*]+)\*\*'), '<b>\$1</b>');
-    // 5. Strip remaining Markdown blockquote markers (line-start ">").
-    s = s.replaceAll(RegExp(r'(^|\n)\s*>\s*', multiLine: true), '\n');
-    // 6. Neutralize fixed dimensions + flex that overflow the 320px bubble.
-    //    display:flex rows don't wrap; fixed height / max-width / gap overflow,
-    //    and the RenderFlex overflow makes the panel collapse in reverse:true.
-    s = s.replaceAll(
-        RegExp(r'display\s*:\s*flex', caseSensitive: false), 'display:block');
-    s = s.replaceAll(
-        RegExp(r'position\s*:\s*(absolute|fixed)', caseSensitive: false),
-        'position:static');
-    s = s.replaceAll(
-        RegExp(
-            r'(max-width|min-width|height|max-height|min-height|gap)\s*:\s*[^;"]+;?',
-            caseSensitive: false),
-        '');
-    return s;
+  /// Appends 撤回 to the built-in selection toolbar, so HTML panels (rendered
+  /// via HtmlWidget, which honors SelectionArea) can be recalled like normal
+  /// text messages.
+  Widget _htmlSelectionMenu(
+      BuildContext context, SelectableRegionState state) {
+    final items = state.contextMenuButtonItems;
+    items.add(ContextMenuButtonItem(
+      label: '撤回',
+      onPressed: () {
+        ContextMenuController.removeAny();
+        onRecall!();
+      },
+    ));
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: state.contextMenuAnchors,
+      buttonItems: items,
+    );
   }
 
   Widget _galleryImage(String? path) {
@@ -279,7 +302,7 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildImage(BuildContext context) {
     return Align(
-      alignment: Alignment.centerLeft,
+      alignment: role == 'user' ? Alignment.centerRight : Alignment.centerLeft,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
         child: ClipRRect(
@@ -295,6 +318,38 @@ class MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildFile(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: role == 'user' ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insert_drive_file, color: scheme.primary),
+            const SizedBox(width: 8),
+            Flexible(child: Text(_filename(), overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _filename() {
+    try {
+      final decoded = metadata == null ? null : jsonDecode(metadata!);
+      final name = decoded is Map ? decoded['filename']?.toString() : null;
+      if (name != null && name.isNotEmpty) return name;
+    } catch (_) {}
+    return p.basename(content);
   }
 }
 

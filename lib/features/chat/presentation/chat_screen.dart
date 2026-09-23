@@ -1,20 +1,29 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:drift/drift.dart' hide Column;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/commands/slash_commands.dart';
 import '../../../core/db/database.dart';
+import '../../../core/import/imported_character.dart';
+import '../../../core/import/png_card_writer.dart';
 import '../../../core/import/st_card_parser.dart';
 import '../../../core/network/llm/token_estimator.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/app_exception.dart';
 import '../../../core/utils/dialogs.dart';
+import '../../../core/widgets/color_field.dart';
 import '../data/session_exporter.dart';
 import '../data/session_repository.dart';
 import 'chat_controller.dart';
@@ -38,6 +47,15 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _inputController = TextEditingController();
   late final FocusNode _inputFocus = FocusNode(onKeyEvent: _onKeyEvent);
+  final _listController = ScrollController();
+  final _uuid = const Uuid();
+  final List<({String path, String name, bool isImage})> _pending = [];
+
+  // P4 #19: user-picked portrait images for a just-finished assistant card,
+  // keyed by the assistant message id. Applied as avatar + gallery on import,
+  // and used as the PNG cover on download.
+  final Map<String, List<List<int>>> _cardImages = {};
+  final Set<String> _askedImage = {};
 
   // Slash-command popup state.
   bool _slashOpen = false;
@@ -63,17 +81,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // `sendMessage` already guards persisting against deleted sessions.
     _inputFocus.dispose();
     _inputController.dispose();
+    _listController.dispose();
     super.dispose();
   }
 
   Future<void> _send() async {
     final text = _inputController.text;
-    if (text.trim().isEmpty) return;
+    if (text.trim().isEmpty && _pending.isEmpty) return;
     _inputController.clear();
     try {
-      await ref
-          .read(chatControllerProvider.notifier)
-          .sendMessage(widget.sessionId, text);
+      final controller = ref.read(chatControllerProvider.notifier);
+      if (_pending.isNotEmpty) {
+        final images = [for (final a in _pending) if (a.isImage) a.path];
+        final files = [
+          for (final a in _pending)
+            if (!a.isImage) (path: a.path, name: a.name),
+        ];
+        _pending.clear();
+        if (mounted) setState(() {});
+        await controller.sendAttachments(
+          widget.sessionId,
+          images: images,
+          files: files,
+          caption: text.trim().isEmpty ? null : text,
+        );
+      } else {
+        await controller.sendMessage(widget.sessionId, text);
+      }
     } catch (e) {
       if (mounted) {
         await showErrorDialog(
@@ -88,7 +122,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ref.read(chatControllerProvider.notifier).cancel(widget.sessionId);
 
   /// Imports a detected assistant-produced card/world/worldbook in one tap.
-  Future<void> _importAssistantResult(ImportableResult result) async {
+  Future<void> _importAssistantResult(
+      ImportableResult result, String messageId) async {
     if (!mounted) return;
     final label = switch (result.kind) {
       ImportableKind.character => '角色卡',
@@ -106,8 +141,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final db = ref.read(dbProvider);
       switch (result.kind) {
         case ImportableKind.character:
-          final id = await CharacterRepository(db)
-              .importCharacter(StCardParser().parse(result.json));
+          var imported = StCardParser().parse(result.json);
+          final images = _cardImages[messageId];
+          if (images != null && images.isNotEmpty) {
+            imported = imported
+                .withAvatar(images.first)
+                .withGallery([
+                  for (var i = 0; i < images.length; i++)
+                    ImportedImage(name: '配图${i + 1}', bytes: images[i]),
+                ]);
+          }
+          final id = await CharacterRepository(db).importCharacter(imported);
           ref.invalidate(characterProvider(id));
         case ImportableKind.world:
           final companion = parseWorldJson(result.json);
@@ -123,6 +167,102 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             context, e is AppException ? e.message : '导入失败：$e');
       }
     }
+  }
+
+  /// Exports a detected character card as a PNG (SillyTavern `chara` tEXt
+  /// chunk) — using the user-picked portrait as cover when present — and opens
+  /// the system share sheet.
+  Future<void> _downloadPngCard(
+      ImportableResult result, String messageId) async {
+    if (!mounted) return;
+    var name = '';
+    try {
+      name = StCardParser().parse(result.json).name;
+    } catch (_) {
+      // Name is cosmetic; leave it empty on a parse failure.
+    }
+    try {
+      final bytes = PngCardWriter().embed(result.json,
+          coverBytes: _cardImages[messageId]?.first, name: name);
+      final dir = await getTemporaryDirectory();
+      final safeName = (name.trim().isEmpty ? 'character' : name.trim())
+          .replaceAll(RegExp(r'[/\\:*?"<>|]'), '_');
+      final fileName =
+          '${safeName}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File(p.join(dir.path, fileName));
+      await file.writeAsBytes(bytes);
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(file.path, mimeType: 'image/png')],
+        fileNameOverrides: [fileName],
+      ));
+    } catch (e) {
+      if (mounted) {
+        await showErrorDialog(
+            context, e is AppException ? e.message : '下载失败：$e');
+      }
+    }
+  }
+
+  /// P4 #19: after this session's reply finishes, offer to attach a portrait to
+  /// a freshly produced character card (once per assistant message).
+  void _maybeAskCardImage() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scanForCard());
+  }
+
+  Future<void> _scanForCard() async {
+    // Drift 的 .watch() 异步送达新持久化的消息，可能比 isGenerating 翻 false
+    // 滞后一两帧。短暂重试，确保卡片消息已在列表里再扫描，否则「为这张卡配图？」
+    // 弹窗会被静默跳过。
+    for (var attempt = 0; attempt < 6 && mounted; attempt++) {
+      final messages = ref.read(messagesProvider(widget.sessionId)).value ?? [];
+      for (final m in messages.reversed) {
+        if (m.role != 'assistant') continue;
+        if (detectImportable(m.content)?.kind != ImportableKind.character) {
+          continue;
+        }
+        if (_askedImage.contains(m.id)) continue;
+        _askedImage.add(m.id);
+        await _askCardImage(m.id);
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  Future<void> _askCardImage(String messageId) async {
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('为这张卡配图？'),
+        content: const Text('可一次选多张图，设为卡片封面、角色头像并加入图库。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('跳过'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('选图'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final files = await FilePicker.pickFiles(type: FileType.image);
+    if (files.isEmpty) return;
+    final bytes = <List<int>>[];
+    for (final f in files) {
+      final path = f.path;
+      if (path == null) continue;
+      try {
+        bytes.add(await File(path).readAsBytes());
+      } catch (_) {
+        // Best-effort: a bad pick shouldn't crash.
+      }
+    }
+    if (bytes.isNotEmpty) _cardImages[messageId] = bytes;
   }
 
   // --- Slash-command popup ---
@@ -315,6 +455,72 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (mounted) await showSuccessDialog(context, '已保存');
   }
 
+  /// Per-session appearance (bubble/text colors), kept separate from the
+  /// sampling/API session settings.
+  Future<void> _chatColors() async {
+    final db = ref.read(dbProvider);
+    final session = await db.getSession(widget.sessionId);
+    if (session == null || !mounted) return;
+
+    String? bubbleUser = session.bubbleUserColor;
+    String? bubbleAssistant = session.bubbleAssistantColor;
+    String? userText = session.userTextColor;
+    String? assistantText = session.assistantTextColor;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('外观颜色'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ColorRow(
+                label: '用户气泡颜色',
+                value: bubbleUser,
+                onChanged: (v) => setState(() => bubbleUser = v),
+              ),
+              ColorRow(
+                label: '角色气泡颜色',
+                value: bubbleAssistant,
+                onChanged: (v) => setState(() => bubbleAssistant = v),
+              ),
+              ColorRow(
+                label: '用户文本颜色',
+                value: userText,
+                onChanged: (v) => setState(() => userText = v),
+              ),
+              ColorRow(
+                label: '角色文本颜色',
+                value: assistantText,
+                onChanged: (v) => setState(() => assistantText = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    await db.updateSession(widget.sessionId, SessionsCompanion(
+      bubbleUserColor: Value(bubbleUser),
+      bubbleAssistantColor: Value(bubbleAssistant),
+      userTextColor: Value(userText),
+      assistantTextColor: Value(assistantText),
+    ));
+    if (mounted) await showSuccessDialog(context, '已保存');
+  }
+
   bool _hasAlternates(Character? character) {
     if (character == null) return false;
     try {
@@ -340,6 +546,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final tokenUsage = ref.watch(tokenUsageProvider(widget.sessionId)).value;
     final userInputTokens = estimateTokens(_inputController.text);
     final sessionTokens = ref.watch(sessionTokensProvider(widget.sessionId)).value;
+    final chatColors = ref.watch(chatColorsProvider(widget.sessionId));
+
+    // P4 #19: once this session's reply finishes, offer to attach a portrait
+    // to a freshly produced character card.
+    ref.listen(
+      chatControllerProvider.select((s) => s.isGenerating(widget.sessionId)),
+      (prev, next) {
+        if (prev == true && next == false) _maybeAskCardImage();
+      },
+    );
 
     final messages = messagesAsync.value ?? <Message>[];
     final hasUserReply =
@@ -365,6 +581,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.vertical_align_top),
+            tooltip: '转到最早',
+            onPressed: () {
+              if (!_listController.hasClients) return;
+              _listController.jumpTo(_listController.position.maxScrollExtent);
+            },
+          ),
           if (hasAlternates && !hasUserReply) ...[
             IconButton(
               icon: const Icon(Icons.chevron_left),
@@ -397,6 +621,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 }
               } else if (value == 'settings') {
                 _sessionSettings();
+              } else if (value == 'colors') {
+                _chatColors();
               } else if (value == 'export') {
                 _exportSession();
               } else if (value == 'delete') {
@@ -407,6 +633,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               PopupMenuItem(value: 'detail', child: Text('查看角色详情')),
               PopupMenuItem(value: 'edit', child: Text('编辑人设')),
               PopupMenuItem(value: 'settings', child: Text('会话设置')),
+              PopupMenuItem(value: 'colors', child: Text('外观颜色')),
               PopupMenuItem(value: 'export', child: Text('导出会话')),
               PopupMenuItem(value: 'delete', child: Text('删除会话')),
             ],
@@ -420,6 +647,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('加载失败：$e')),
               data: (_) => ListView.builder(
+                controller: _listController,
                 reverse: true,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 itemCount: reversed.length + (showStreaming ? 1 : 0),
@@ -434,6 +662,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           : () => context.push('/contacts/$characterId'),
                       imagePaths: imagePaths,
                       regexScripts: regexScripts,
+                      bubbleColor: chatColors.assistantBubble,
+                      textColor: chatColors.assistantText,
                     );
                   }
                   final msg = reversed[showStreaming ? index - 1 : index];
@@ -448,6 +678,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         role: msg.role,
                         content: msg.content,
                         type: msg.type,
+                        metadata: msg.metadata,
                         avatarName: character?.name,
                         avatarPath: character?.avatarPath,
                         onAvatarTap: characterId == null
@@ -456,11 +687,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         onRecall: () => _recall(msg),
                         imagePaths: imagePaths,
                         regexScripts: regexScripts,
+                        depth: showStreaming ? index - 1 : index,
+                        bubbleColor: msg.role == 'user'
+                            ? chatColors.userBubble
+                            : chatColors.assistantBubble,
+                        textColor: msg.role == 'user'
+                            ? chatColors.userText
+                            : chatColors.assistantText,
                       ),
                       if (importable != null)
                         _ImportButton(
                           kind: importable.kind,
-                          onTap: () => _importAssistantResult(importable),
+                          onTap: () =>
+                              _importAssistantResult(importable, msg.id),
+                          onDownload:
+                              importable.kind == ImportableKind.character
+                                  ? () => _downloadPngCard(importable, msg.id)
+                                  : null,
                         ),
                     ],
                   );
@@ -484,16 +727,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_slashOpen) _slashPopup(context),
+          if (_pending.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final a in _pending)
+                    Chip(
+                      avatar: Icon(
+                        a.isImage ? Icons.image : Icons.insert_drive_file,
+                        size: 16,
+                      ),
+                      label: Text(a.name, overflow: TextOverflow.ellipsis),
+                      onDeleted: () => setState(() => _pending.remove(a)),
+                    ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: Row(
               children: [
+                IconButton(
+                  icon: const Icon(Icons.attach_file),
+                  tooltip: '发送图片/文件',
+                  onPressed: _pickAttachment,
+                ),
+                const SizedBox(width: 4),
                 Expanded(
                   child: TextField(
                     controller: _inputController,
                     focusNode: _inputFocus,
                     minLines: 1,
-                    maxLines: 4,
+                    maxLines: 8,
                     textInputAction: TextInputAction.send,
                     onChanged: _onInputChanged,
                     onSubmitted: _onSubmit,
@@ -518,6 +786,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
+
+  Future<void> _pickAttachment() async {
+    final files = await FilePicker.pickFiles(type: FileType.any);
+    if (files.isEmpty) return;
+    final dir = await getApplicationDocumentsDirectory();
+    final attachDir = Directory(p.join(dir.path, 'chat_attachments'));
+    await attachDir.create(recursive: true);
+    for (final f in files) {
+      final src = f.path;
+      final name = f.name;
+      if (src == null) continue;
+      final ext = p.extension(name).isEmpty ? '' : p.extension(name);
+      final dest = p.join(attachDir.path, '${_uuid.v4()}$ext');
+      await File(src).copy(dest);
+      _pending.add((path: dest, name: name, isImage: _isImageExt(ext)));
+    }
+    if (mounted) setState(() {});
+  }
+
+  bool _isImageExt(String ext) => const {
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+      }.contains(ext.toLowerCase());
 
   Widget _slashPopup(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -933,6 +1223,8 @@ class _StreamingBubble extends ConsumerWidget {
     this.onAvatarTap,
     this.imagePaths = const {},
     this.regexScripts = const [],
+    this.bubbleColor,
+    this.textColor,
   });
 
   final String sessionId;
@@ -941,6 +1233,8 @@ class _StreamingBubble extends ConsumerWidget {
   final VoidCallback? onAvatarTap;
   final Map<String, String> imagePaths;
   final List<Map<String, dynamic>> regexScripts;
+  final Color? bubbleColor;
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -964,6 +1258,9 @@ class _StreamingBubble extends ConsumerWidget {
       onAvatarTap: onAvatarTap,
       imagePaths: imagePaths,
       regexScripts: regexScripts,
+      depth: 0,
+      bubbleColor: bubbleColor,
+      textColor: textColor,
     );
   }
 }
@@ -971,10 +1268,15 @@ class _StreamingBubble extends ConsumerWidget {
 /// A one-tap import button shown under an assistant message whose content is an
 /// importable card / world / worldbook.
 class _ImportButton extends StatelessWidget {
-  const _ImportButton({required this.kind, required this.onTap});
+  const _ImportButton({
+    required this.kind,
+    required this.onTap,
+    this.onDownload,
+  });
 
   final ImportableKind kind;
   final VoidCallback onTap;
+  final VoidCallback? onDownload;
 
   String get _label => switch (kind) {
         ImportableKind.character => '导入角色卡',
@@ -984,10 +1286,22 @@ class _ImportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
+    final import = TextButton.icon(
       onPressed: onTap,
       icon: const Icon(Icons.download_outlined, size: 18),
       label: Text(_label),
+    );
+    if (onDownload == null) return import;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        import,
+        TextButton.icon(
+          onPressed: onDownload,
+          icon: const Icon(Icons.ios_share, size: 18),
+          label: const Text('下载 PNG 卡'),
+        ),
+      ],
     );
   }
 }

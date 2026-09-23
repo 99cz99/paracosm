@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import 'color_field.dart';
+
 /// Renders a markdown string as a list of rich [InlineSpan]s.
 ///
 /// Keeps `SelectableText` (selection/copy + `contextMenuBuilder`) working,
@@ -153,26 +155,33 @@ List<InlineSpan> _blockSpans(
   }
 }
 
-List<InlineSpan> _inlineSpans(List<md.Node> nodes, TextStyle style) {
+List<InlineSpan> _inlineSpans(List<md.Node> nodes, TextStyle style,
+    {Color? inheritColor}) {
   final out = <InlineSpan>[];
+  var color = inheritColor;
   for (final node in nodes) {
     if (node is md.Text) {
-      out.add(TextSpan(text: node.text, style: style));
+      final (spans, endColor) = _colorizeText(node.text, style, color);
+      out.addAll(spans);
+      color = endColor;
       continue;
     }
     final el = node as md.Element;
     switch (el.tag) {
       case 'strong':
-        out.addAll(_inlineSpans(
-            _children(el), style.copyWith(fontWeight: FontWeight.bold)));
+        out.addAll(_inlineSpans(_children(el),
+            style.copyWith(fontWeight: FontWeight.bold),
+            inheritColor: color));
         break;
       case 'em':
-        out.addAll(_inlineSpans(
-            _children(el), style.copyWith(fontStyle: FontStyle.italic)));
+        out.addAll(_inlineSpans(_children(el),
+            style.copyWith(fontStyle: FontStyle.italic),
+            inheritColor: color));
         break;
       case 'del':
         out.addAll(_inlineSpans(_children(el),
-            style.copyWith(decoration: TextDecoration.lineThrough)));
+            style.copyWith(decoration: TextDecoration.lineThrough),
+            inheritColor: color));
         break;
       case 'code':
         out.add(TextSpan(text: _textOf(el), style: _codeStyle(style)));
@@ -191,11 +200,91 @@ List<InlineSpan> _inlineSpans(List<md.Node> nodes, TextStyle style) {
         out.add(TextSpan(text: el.attributes['alt'] ?? '', style: style));
         break;
       default:
-        out.addAll(_inlineSpans(_children(el), style));
+        out.addAll(_inlineSpans(_children(el), style, inheritColor: color));
     }
   }
   return out;
 }
+
+/// Splits a raw-text run on inline `<font>`/`<span>` color tags, emitting
+/// colored [TextSpan]s. Returns the spans and the color state at the end.
+(List<InlineSpan>, Color?) _colorizeText(
+    String text, TextStyle style, Color? color) {
+  final out = <InlineSpan>[];
+  final re = RegExp(r'<(/?)(?:font|span)[^>]*>', caseSensitive: false);
+  var last = 0;
+  for (final m in re.allMatches(text)) {
+    if (m.start > last) {
+      out.add(TextSpan(
+        text: text.substring(last, m.start),
+        style: color != null ? style.copyWith(color: color) : style,
+      ));
+    }
+    final tag = _colorTag(m.group(0)!);
+    if (tag != null) color = tag.color;
+    last = m.end;
+  }
+  if (last < text.length) {
+    out.add(TextSpan(
+      text: text.substring(last),
+      style: color != null ? style.copyWith(color: color) : style,
+    ));
+  }
+  return (out, color);
+}
+
+/// Recognizes inline HTML color tags the model/card may emit:
+/// `<font color="X">` / `<span style="color:X">` and their closing tags.
+/// Returns `(isTag: true, color: …)` for a color tag (color null = closing),
+/// or null when the text isn't a color tag.
+({bool isTag, Color? color})? _colorTag(String text) {
+  final t = text.trim();
+  if (t.isEmpty) return null;
+  if (t == '</font>' || t == '</span>') return (isTag: true, color: null);
+  // <font color="X"> — a direct color attribute (quoted or bare).
+  var m = RegExp(r'^<font[^>]*\bcolor=["]?([^">\s]+)', caseSensitive: false)
+      .firstMatch(t);
+  if (m != null) {
+    final c = _parseColor(m.group(1)!);
+    return c == null ? null : (isTag: true, color: c);
+  }
+  // <span style="color:X"> — color inside a style attribute.
+  m = RegExp(r'^<span[^>]*\bstyle=["]?[^"]*?color:\s*([^;"]+)',
+          caseSensitive: false)
+      .firstMatch(t);
+  if (m != null) {
+    final c = _parseColor(m.group(1)!);
+    return c == null ? null : (isTag: true, color: c);
+  }
+  return null;
+}
+
+Color? _parseColor(String s) {
+  var v = s.trim();
+  if (v.length >= 2 &&
+      ((v.startsWith('"') && v.endsWith('"')) ||
+          (v.startsWith("'") && v.endsWith("'")))) {
+    v = v.substring(1, v.length - 1);
+  }
+  return parseHexColor(v) ?? _namedColors[v.toLowerCase()];
+}
+
+const Map<String, Color> _namedColors = {
+  'red': Color(0xFFFF0000),
+  'blue': Color(0xFF2196F3),
+  'green': Color(0xFF4CAF50),
+  'yellow': Color(0xFFFFC107),
+  'orange': Color(0xFFFF9800),
+  'purple': Color(0xFF9C27B0),
+  'pink': Color(0xFFFF6B9D),
+  'black': Color(0xFF000000),
+  'white': Color(0xFFFFFFFF),
+  'gray': Color(0xFF9E9E9E),
+  'grey': Color(0xFF9E9E9E),
+  'cyan': Color(0xFF00BCD4),
+  'magenta': Color(0xFFFF00FF),
+  'brown': Color(0xFF795548),
+};
 
 List<InlineSpan> _listSpans(md.Element list, TextStyle base,
     {required bool ordered}) {

@@ -212,7 +212,7 @@ class _ContactListState extends ConsumerState<_ContactList> {
                   name: c.name,
                   avatarPath: c.avatarPath,
                 ),
-                title: Text(c.name),
+                title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
                   _tags(c),
                   maxLines: 1,

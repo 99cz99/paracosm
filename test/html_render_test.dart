@@ -10,7 +10,7 @@ void main() {
   // Mirrors a regex_scripts forum/status panel: fixed dims + flex + gap that
   // previously overflowed the 320px bubble (right + bottom).
   const panel = '正文叙事文字。\n'
-      '<details><summary>**[漫研社区]**</summary>\n'
+      '<details open><summary>**[漫研社区]**</summary>\n'
       '><body>\n'
       '<div style="max-width:800px;margin:20px auto;background:#fff;">\n'
       '  <div style="display:flex;justify-content:center;gap:40px;">\n'
@@ -42,5 +42,31 @@ void main() {
       content: panel,
     )));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pink dialog box (<style> class CSS) renders without overflow',
+      (tester) async {
+    const gal = '<style>\n'
+        '.gal-container { background: linear-gradient(135deg, #fff0f3 0%, #ffe5e5 100%); border: 3px solid #FF69B4; border-radius: 8px; padding: 20px; }\n'
+        '.gal-content { color: #000000; white-space: pre-wrap; }\n'
+        '</style>\n'
+        '<div class="gal-container"><div class="gal-content">作者：AIBO\n本卡免费</div></div>';
+    await tester.pumpWidget(wrap(const MessageBubble(
+      role: 'assistant',
+      content: gal,
+    )));
+    expect(find.textContaining('作者：AIBO', findRichText: true), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('collapsible panel is collapsed by default', (tester) async {
+    const collapsed =
+        '<details><summary>标题</summary><div>正文内容</div></details>';
+    await tester.pumpWidget(wrap(const MessageBubble(
+      role: 'assistant',
+      content: collapsed,
+    )));
+    expect(find.textContaining('标题', findRichText: true), findsWidgets);
+    expect(find.textContaining('正文内容', findRichText: true), findsNothing);
   });
 }

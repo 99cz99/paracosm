@@ -92,4 +92,19 @@ void main() {
     expect(spans.whereType<WidgetSpan>(), hasLength(1));
     expect(spans.whereType<TextSpan>(), isEmpty);
   });
+
+  test('<font color> renders colored text (hex)', () {
+    final spans = markdownSpans('a <font color="#FF0000">红</font> b', base);
+    expect(_fullText(spans), 'a 红 b');
+    final leaves = _leavesAll(spans);
+    expect(leaves.firstWhere((l) => l.$1 == '红').$2?.color,
+        const Color(0xFFFF0000));
+  });
+
+  test('<font color> renders named color', () {
+    final spans = markdownSpans('<font color="red">红</font>', base);
+    final leaves = _leavesAll(spans);
+    expect(leaves.firstWhere((l) => l.$1 == '红').$2?.color,
+        const Color(0xFFFF0000));
+  });
 }

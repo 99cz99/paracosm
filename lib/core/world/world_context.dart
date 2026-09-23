@@ -14,10 +14,10 @@ class WorldbookMatcher {
   /// Returns the `content` of every matching entry, with `{{random:a|b}}`
   /// expanded. Pure matching, no LLM.
   static List<String> triggered(String? bookJson, String context,
-      {Random? random}) {
+      {int? depth, Random? random}) {
     final rng = random ?? Random();
     return [
-      for (final e in matchedEntries(bookJson, context))
+      for (final e in matchedEntries(bookJson, context, depth: depth))
         _expandRandom(e['content']?.toString() ?? '', rng),
     ];
   }
@@ -25,8 +25,11 @@ class WorldbookMatcher {
   /// Returns the matching entry maps (`comment`/`keys`/`content`/…), honoring
   /// `enabled`/`constant` and the rich fields exactly like runtime injection,
   /// so the detail/edit pages can preview which entries a snippet triggers.
+  /// [depth] gates entries that carry a minimum `depth` (SillyTavern's
+  /// "only active after N messages"); pass null to skip gating (previews).
   static List<Map<String, dynamic>> matchedEntries(
-      String? bookJson, String context) {
+      String? bookJson, String context,
+      {int? depth}) {
     if (bookJson == null || bookJson.isEmpty) return const [];
     final Map<String, dynamic> book;
     try {
@@ -54,7 +57,7 @@ class WorldbookMatcher {
     // 1. Direct matches against the recent context.
     final frontier = <Map<String, dynamic>>[];
     for (final e in entries) {
-      if (_entryMatches(e, context)) addIfNew(e, frontier);
+      if (_entryMatches(e, context, depth: depth)) addIfNew(e, frontier);
     }
 
     // 2. Recursive scanning: a matched entry's content re-triggers other
@@ -70,7 +73,9 @@ class WorldbookMatcher {
           final content = e['content']?.toString() ?? '';
           if (content.isEmpty) continue;
           for (final other in entries) {
-            if (_entryMatches(other, content)) addIfNew(other, next);
+            if (_entryMatches(other, content, depth: depth)) {
+              addIfNew(other, next);
+            }
           }
         }
         current = next;
@@ -83,10 +88,16 @@ class WorldbookMatcher {
     return matched;
   }
 
-  static bool _entryMatches(Map<String, dynamic> e, String context) {
+  static bool _entryMatches(Map<String, dynamic> e, String context,
+      {int? depth}) {
     final enabled = e['enabled'] != false;
     final content = e['content']?.toString() ?? '';
     if (!enabled || content.isEmpty) return false;
+    // SillyTavern `depth` gates an entry to only activate once the chat has
+    // reached at least N messages. Applies to constant entries too (this is
+    // how "always-on, depth-layered" books unlock progressively).
+    final entryDepth = _toInt(e['depth'], 0);
+    if (depth != null && depth < entryDepth) return false;
     if (e['constant'] == true) return true;
 
     final useRegex = e['use_regex'] == true;
@@ -177,18 +188,20 @@ class WorldContext {
   }
 
   /// Raw union of keyword hits across all bound worldbooks (no section header).
-  List<String> matchedEntries(String recentContext, {Random? random}) {
+  List<String> matchedEntries(String recentContext,
+      {int? depth, Random? random}) {
     final out = <String>[];
     for (final book in worldbooks) {
-      out.addAll(
-          WorldbookMatcher.triggered(book.bookJson, recentContext, random: random));
+      out.addAll(WorldbookMatcher.triggered(book.bookJson, recentContext,
+          depth: depth, random: random));
     }
     return out;
   }
 
   /// Union of keyword hits across all bound worldbooks, as one【世界书】block.
-  String buildWorldbookSection(String recentContext, {Random? random}) {
-    final out = matchedEntries(recentContext, random: random);
+  String buildWorldbookSection(String recentContext,
+      {int? depth, Random? random}) {
+    final out = matchedEntries(recentContext, depth: depth, random: random);
     if (out.isEmpty) return '';
     return '【世界书】\n${out.join('\n\n')}';
   }

@@ -66,6 +66,20 @@ class ImportedCharacter {
         gallery: gallery,
         regexScripts: regexScripts,
       );
+
+  ImportedCharacter withGallery(List<ImportedImage> gallery) => ImportedCharacter(
+        name: name,
+        core: core,
+        adaptation: adaptation,
+        worldbook: worldbook,
+        tags: tags,
+        sourcePath: sourcePath,
+        affinity: affinity,
+        stateSchema: stateSchema,
+        avatarBytes: avatarBytes,
+        gallery: gallery,
+        regexScripts: regexScripts,
+      );
 }
 
 /// A named image (expression / background) carried by a character card.

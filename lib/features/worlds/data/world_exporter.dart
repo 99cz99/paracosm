@@ -29,13 +29,28 @@ WorldsCompanion? parseWorldJson(String json) {
       id: const Uuid().v4(),
       name: name,
       description: Value((data['description'] as String?)?.trim()),
-      rulesJson: Value((data['rulesJson'] ?? '{}').toString()),
-      initialStateJson: Value((data['initialStateJson'] ?? '{}').toString()),
-      npcPoolJson: Value((data['npcPoolJson'] ?? '{}').toString()),
+      rulesJson: Value(_normalizeTextField(data['rulesJson'])),
+      initialStateJson: Value(_normalizeTextField(data['initialStateJson'])),
+      npcPoolJson: Value(_normalizeTextField(data['npcPoolJson'])),
       createdAt: now,
       updatedAt: now,
     );
   } catch (_) {
     return null;
   }
+}
+
+/// Normalizes a world text field (rules / initial state / NPC pool) into the
+/// stored `{"text": "…"}` shape the editor expects. The assistant may emit a
+/// plain string instead of the wrapped object — accept both.
+String _normalizeTextField(dynamic value) {
+  if (value == null) return '{}';
+  if (value is Map) return jsonEncode(value);
+  final s = value.toString().trim();
+  if (s.isEmpty) return '{}';
+  // Already a JSON object (e.g. `{"text":"…"}`) — keep as-is.
+  try {
+    if (jsonDecode(s) is Map) return s;
+  } catch (_) {}
+  return jsonEncode({'text': s});
 }

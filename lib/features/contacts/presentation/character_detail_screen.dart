@@ -20,6 +20,7 @@ import '../../../core/world/world_context.dart';
 import '../../chat/data/session_repository.dart';
 import '../data/character_repository.dart';
 import 'contacts_providers.dart';
+import 'translation_controller.dart';
 import 'widgets/avatar_crop_screen.dart';
 import 'widgets/character_avatar.dart';
 import 'widgets/expandable_section.dart';
@@ -63,6 +64,7 @@ class CharacterDetailScreen extends ConsumerWidget {
   Widget _build(BuildContext context, WidgetRef ref, Character c) {
     final core = _decode(c.corePersonaJson);
     final tags = _decodeTags(c.tags);
+    final translateProgress = ref.watch(translationControllerProvider)[c.id];
 
     final persona = <Widget>[
       ..._section(context, '角色设定', core['description']),
@@ -136,10 +138,31 @@ class CharacterDetailScreen extends ConsumerWidget {
         if (_hasEnglishGreetings(core)) ...[
           const SizedBox(height: 8),
           TextButton.icon(
-            onPressed: () => _translateGreetings(context, ref, c),
+            onPressed: () => _startTranslate(context, ref, c),
             icon: const Icon(Icons.translate),
             label: const Text('翻译开场白为中文'),
           ),
+          if (translateProgress?.running == true) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: translateProgress!.total == 0
+                  ? null
+                  : translateProgress.done / translateProgress.total,
+            ),
+            const SizedBox(height: 4),
+            Text('翻译中 ${translateProgress.done} / ${translateProgress.total}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
+          if (translateProgress?.error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '翻译失败：${translateProgress!.error}',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
         if (_hasEnglishWorldbookKeys(c)) ...[
           const SizedBox(height: 8),
@@ -627,104 +650,20 @@ class CharacterDetailScreen extends ConsumerWidget {
     return false;
   }
 
-  /// Translates the character's English greetings to Chinese and caches the
-  /// result under `core['greetings_zh']`, so chats can start in Chinese.
-  Future<void> _translateGreetings(
+  /// Kicks off background greeting translation. The actual work lives in
+  /// [TranslationController] so the user can leave the page mid-translation.
+  Future<void> _startTranslate(
     BuildContext context,
     WidgetRef ref,
     Character c,
   ) async {
     final core = _decode(c.corePersonaJson);
-
-    // 已翻译过就不再重翻（避免覆盖已有中文缓存、浪费一次 LLM 调用）。
     final cachedZh = core['greetings_zh'];
     if (cachedZh is List && cachedZh.isNotEmpty) {
-      if (context.mounted) {
-        await showSuccessDialog(context, '开场白已翻译过，无需重复翻译');
-      }
+      await showSuccessDialog(context, '开场白已翻译过，无需重复翻译');
       return;
     }
-
-    // 保留原文格式：只 trim + 精确去重，不做空白折叠（否则换行/段落结构会丢）。
-    final greetings = <String>[];
-    void add(String s) {
-      final t = s.trim();
-      if (t.isEmpty || greetings.contains(t)) return;
-      greetings.add(t);
-    }
-
-    add((core['first_mes'] ?? '').toString());
-    final alts = core['alternate_greetings'];
-    if (alts is List) {
-      for (final a in alts) {
-        add(a.toString());
-      }
-    }
-    if (greetings.isEmpty) return;
-
-    final config = await resolveActiveProvider(
-      ref.read(dbProvider),
-      ref.read(secureKeyStoreProvider),
-    );
-    if (config == null) {
-      if (context.mounted) {
-        await showErrorDialog(context, '请先在「我」中配置 API Provider');
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-    final progress = ValueNotifier<int>(0);
-    final total = greetings.length;
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      useRootNavigator: false,
-      builder: (_) => ValueListenableBuilder<int>(
-        valueListenable: progress,
-        builder: (context, value, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 12),
-              Text('翻译中 $value / $total'),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    final zh = <String>[];
-    try {
-      for (var i = 0; i < greetings.length; i++) {
-        final g = greetings[i];
-        if (!needsTranslation(g)) {
-          zh.add(g);
-        } else {
-          final t = await translateToChinese(buildLlmProvider(config), g);
-          zh.add(t.isNotEmpty ? t : g);
-        }
-        progress.value = i + 1;
-      }
-    } catch (e) {
-      if (context.mounted) Navigator.of(context).pop();
-      if (context.mounted) await showErrorDialog(context, '翻译失败：$e');
-      return;
-    }
-
-    core['greetings_zh'] = zh;
-    await ref.read(dbProvider).updateCharacter(
-          c.id,
-          CharactersCompanion(
-            corePersonaJson: Value(jsonEncode(core)),
-            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-          ),
-        );
-    ref.invalidate(characterProvider(c.id));
-
-    if (context.mounted) Navigator.of(context).pop();
-    if (context.mounted) await showSuccessDialog(context, '已翻译并保存');
+    ref.read(translationControllerProvider.notifier).startTranslate(c.id);
   }
 
   List<Widget> _section(BuildContext context, String title, dynamic value) {
@@ -741,12 +680,19 @@ class CharacterDetailScreen extends ConsumerWidget {
       if (text.isNotEmpty) items.add(text);
     }
     if (items.isEmpty) return const [];
+    if (items.length == 1) {
+      return [ExpandableSection(title: title, text: items.single)];
+    }
+    // Multiple entries: fold the whole list behind one header, so N greetings
+    // don't each claim a row (the per-item fold still lives inside).
     return [
-      for (var i = 0; i < items.length; i++)
-        ExpandableSection(
-          title: items.length == 1 ? title : '$title ${i + 1}',
-          text: items[i],
-        ),
+      ExpansionTile(
+        title: Text('$title（${items.length}）'),
+        children: [
+          for (var i = 0; i < items.length; i++)
+            ExpandableSection(title: '第 ${i + 1} 条', text: items[i]),
+        ],
+      ),
     ];
   }
 

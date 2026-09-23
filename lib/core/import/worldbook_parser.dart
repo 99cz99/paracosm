@@ -30,27 +30,40 @@ class WorldbookParser {
     };
   }
 
-  Map<String, dynamic> _entry(Map<String, dynamic> e) => <String, dynamic>{
-        'keys': e['keys'] is List
-            ? List<dynamic>.from(e['keys'] as List)
-            : <dynamic>[],
-        'secondary_keys': e['secondary_keys'] is List
-            ? List<dynamic>.from(e['secondary_keys'] as List)
-            : <dynamic>[],
-        'content': e['content']?.toString() ?? '',
-        'enabled': e['enabled'] ?? true,
-        'constant': e['constant'] ?? false,
-        'insertion_order': e['insertion_order'],
-        'position': e['position']?.toString(),
-        'use_regex': e['use_regex'] ?? false,
-        'case_sensitive': e['case_sensitive'] ?? false,
-        'selective': e['selective'] ?? false,
-        'priority': e['priority'],
-        'comment': e['comment']?.toString() ?? '',
-        // Preserved metadata so non-standard / complex cards don't lose detail.
-        'group': e['group']?.toString(),
-        'probability': e['probability'],
-        'exclude_recursion': e['exclude_recursion'] ?? false,
-        'match_whole_words': e['match_whole_words'] ?? false,
-      };
+  Map<String, dynamic> _entry(Map<String, dynamic> e) {
+    // Newer SillyTavern cards nest several trigger fields under `extensions`
+    // (case_sensitive / match_whole_words / exclude_recursion / probability /
+    // group / depth …); older cards keep them at the top level. Read both,
+    // preferring the top level, so depth-layered / rich cards don't lose them.
+    final ext = e['extensions'] is Map
+        ? Map<String, dynamic>.from(e['extensions'] as Map)
+        : const <String, dynamic>{};
+    return <String, dynamic>{
+      'keys': e['keys'] is List
+          ? List<dynamic>.from(e['keys'] as List)
+          : <dynamic>[],
+      'secondary_keys': e['secondary_keys'] is List
+          ? List<dynamic>.from(e['secondary_keys'] as List)
+          : <dynamic>[],
+      'content': e['content']?.toString() ?? '',
+      'enabled': e['enabled'] ?? true,
+      'constant': e['constant'] ?? false,
+      'insertion_order': e['insertion_order'],
+      'position': e['position']?.toString(),
+      'use_regex': e['use_regex'] ?? false,
+      'case_sensitive': e['case_sensitive'] ?? ext['case_sensitive'] ?? false,
+      'selective': e['selective'] ?? false,
+      'priority': e['priority'] ?? ext['priority'],
+      'comment': e['comment']?.toString() ?? '',
+      // Preserved metadata so non-standard / complex cards don't lose detail.
+      'group': (e['group'] ?? ext['group'])?.toString(),
+      'probability': e['probability'] ?? ext['probability'],
+      'exclude_recursion':
+          e['exclude_recursion'] ?? ext['exclude_recursion'] ?? false,
+      'match_whole_words':
+          e['match_whole_words'] ?? ext['match_whole_words'] ?? false,
+      // Minimum chat depth (message count) before this entry activates.
+      'depth': e['depth'] ?? ext['depth'],
+    };
+  }
 }

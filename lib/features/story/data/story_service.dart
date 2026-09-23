@@ -76,7 +76,8 @@ class StoryService {
       if (story.description.isNotEmpty) story.description,
       ...recentForBook.map((n) => n.narrative),
     ].join('\n');
-    final worldbookSection = worldCtx.buildWorldbookSection(worldbookContext);
+    final worldbookSection =
+        worldCtx.buildWorldbookSection(worldbookContext, depth: path.length);
     if (worldbookSection.isNotEmpty) {
       parts.add(applyPlaceholders(
           worldbookSection, character?.name ?? '', userName));

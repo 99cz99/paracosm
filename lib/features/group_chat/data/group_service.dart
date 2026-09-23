@@ -63,7 +63,10 @@ class GroupService {
       members,
       worldCtx.buildWorldSection(),
       applyPlaceholders(
-          worldCtx.buildWorldbookSection(recentContext), '', userName),
+          worldCtx.buildWorldbookSection(recentContext,
+              depth: allMessages.length),
+          '',
+          userName),
       pairs,
       forcedName,
       groupMemory,
