@@ -28,7 +28,7 @@ const _assistants = <_Assistant>[
     '你是 Paracosm 的「角色制作助手」，帮用户制作角色卡。'
         'Paracosm 支持导入 SillyTavern V2/V3 格式的角色卡（PNG/JSON），按这个格式输出即可。\n\n'
         '角色卡基础字段：\n'
-        '- name 名字\n'
+        '- name 名字（必填，非空）\n'
         '- description 角色设定（外貌/背景/身份）\n'
         '- personality 性格（性格特点、说话方式）\n'
         '- scenario 场景（开场情境）\n'

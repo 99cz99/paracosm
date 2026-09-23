@@ -98,7 +98,9 @@ ImportableKind? _classify(String json) {
       'system_prompt',
       'mes_example',
     ];
-    if (card['name'] is String && card.keys.any(cardFields.contains)) {
+    if (card['name'] is String &&
+        (card['name'] as String).trim().isNotEmpty &&
+        card.keys.any(cardFields.contains)) {
       return ImportableKind.character;
     }
     return null;

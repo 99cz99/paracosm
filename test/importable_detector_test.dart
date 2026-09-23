@@ -41,6 +41,11 @@ void main() {
     expect(detectImportable(json), isNull);
   });
 
+  test('returns null for a card with an empty name', () {
+    const json = '{"name":"","description":"傲娇"}';
+    expect(detectImportable(json), isNull);
+  });
+
   test('extractImageNames pulls <img="名字"> refs in order, de-duplicated', () {
     const json = r'{"spec":"chara_card_v2","data":{"first_mes":'
         r'"看<img=\"立绘\">和<img=\"表情-开心\">，再看一次<img=\"立绘\">"}}';
