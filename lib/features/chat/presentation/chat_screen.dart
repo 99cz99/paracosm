@@ -144,11 +144,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           var imported = StCardParser().parse(result.json);
           final images = _cardImages[messageId];
           if (images != null && images.isNotEmpty) {
+            final names = extractImageNames(result.json);
             imported = imported
                 .withAvatar(images.first)
                 .withGallery([
                   for (var i = 0; i < images.length; i++)
-                    ImportedImage(name: '配图${i + 1}', bytes: images[i]),
+                    ImportedImage(
+                      name: i < names.length ? names[i] : '配图${i + 1}',
+                      bytes: images[i],
+                    ),
                 ]);
           }
           final id = await CharacterRepository(db).importCharacter(imported);

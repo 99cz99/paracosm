@@ -40,4 +40,20 @@ void main() {
     const json = '{"foo":"bar"}';
     expect(detectImportable(json), isNull);
   });
+
+  test('extractImageNames pulls <img="名字"> refs in order, de-duplicated', () {
+    const json = r'{"spec":"chara_card_v2","data":{"first_mes":'
+        r'"看<img=\"立绘\">和<img=\"表情-开心\">，再看一次<img=\"立绘\">"}}';
+    expect(extractImageNames(json), ['立绘', '表情-开心']);
+  });
+
+  test('extractImageNames ignores <img src="url"> network images', () {
+    const json = r'{"first_mes":"<img=\"立绘\"> <img src=\"https://x/y.png\">"}';
+    expect(extractImageNames(json), ['立绘']);
+  });
+
+  test('extractImageNames returns empty for no refs', () {
+    const json = '{"description":"没有图"}';
+    expect(extractImageNames(json), isEmpty);
+  });
 }

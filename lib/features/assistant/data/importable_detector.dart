@@ -106,3 +106,39 @@ ImportableKind? _classify(String json) {
     return null;
   }
 }
+
+/// Extracts the `<img="名字">` gallery names referenced anywhere in a card's
+/// JSON (decoded first, so JSON-escaped quotes are handled), in order of first
+/// appearance and de-duplicated. Used to map user-attached images to the names
+/// the assistant declared in its card. Does not match `<img src="url">`.
+List<String> extractImageNames(String json) {
+  final names = <String>[];
+  final seen = <String>{};
+  final re = RegExp(r'<img="([^"]+)"');
+  Object? root;
+  try {
+    root = jsonDecode(json);
+  } catch (_) {
+    return names;
+  }
+
+  void walk(Object? v) {
+    if (v is String) {
+      for (final m in re.allMatches(v)) {
+        final name = m.group(1)!.trim();
+        if (name.isNotEmpty && seen.add(name)) names.add(name);
+      }
+    } else if (v is List) {
+      for (final e in v) {
+        walk(e);
+      }
+    } else if (v is Map) {
+      for (final e in v.values) {
+        walk(e);
+      }
+    }
+  }
+
+  walk(root);
+  return names;
+}
