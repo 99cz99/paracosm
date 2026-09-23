@@ -129,6 +129,8 @@ lib/
 - **角色创建/编辑/热修改**：`CharacterEditScreen` 的 `characterId` 可空，新建（`CharacterRepository.createCharacter`，`sourceType='manual'`）/编辑共用一屏，字段含 system_prompt/mes_example/creator_notes/nickname/post_history_instructions。聊天页 `…` 菜单「编辑人设」→ `/contacts/:id/edit`；`_buildRequest` 每轮 `getCharacter` 重读 core，改完**下一条消息即生效**（无需刷新 provider）。
 - **用户消息处理 + 后置指令**：`_systemPromptSections` 末尾注入「用户消息处理」默认指令（OOC `(())`/`【】`、`{{user}}`、多意图、人称文风，见 `chat_controller._defaultMessageHandling`）；若 `core['post_history_instructions']` 非空则注入角色自己的（该字段之前存了却从不注入，已修活）。
 - **内置 AI 助手**（`features/assistant/`）：角色/世界/世界书/使用四个助手建模为**内置角色**（`Characters.builtInKey` 非空 + `sourceType='assistant'`，schema v16 加列），`assistant_seed.dart` 幂等 seed（按 `builtInKey` 判存在；**对已存在的助手也会回写内置 prompt**，让措辞/格式修复生效——内置定义始终权威）。system prompt 存 `corePersonaJson['system_prompt']`；seed 还会把 `assets/assistant_avatars/*.png` 拷到文档目录回填 `avatarPath`（内置头像）。入口「我 → 助手」，点击复用 `SessionRepository.getOrCreateSession` + 单聊 `ChatScreen`（worldId=''）。**助手结果一键导入**：助手聊天里，助手消息含可导入 JSON 时消息下渲染「导入」按钮——`importable_detector.dart` 从回复抽 JSON 并分类（角色卡/世界/世界书），点按钮走 `CharacterRepository.importCharacter`/`parseWorldJson`/`WorldbookRepository.importFromJson` 一键落库。联系人列表 `charactersProvider` 按 `builtInKey == null` 过滤。
+- **助手出卡判定一致性**：`detectImportable`（`importable_detector.dart`）与 `StCardParser` 对角色卡的判定要**保持一致**——都解开 V2/V3 `data` 包装、`name` 取 `data['name']` 失败回退顶层 `root['name']`、空名（`trim()` 空）判为无效。助手 prompt 既说「按 SillyTavern V2/V3 输出」又列平铺字段，模型容易把 `name` 放顶层、其余字段放 `data`，故需回退；改判定时两处同步，否则出现「按钮出现但导入报缺 name」或「有名字却无按钮」。
+- **助手卡配图 + 多模态序列化**：`extractImageNames`（`importable_detector.dart`）从卡 JSON 抽 `<img="名字">` 引用名（先 `jsonDecode` 递归扫 string，只匹配命名引用、不匹配 `<img src=url>`）；导入时 `_importAssistantResult` 把用户「配图」传的图按声明名字顺序映射（名字不够回退 `配图N`，第一张作头像）。⚠️ `ChatMessage.toJson()` 是 OpenAI 的 `image_url` 格式，`AnthropicProvider` 必须用 `toAnthropicJson()`（`{type:image,source:{base64,media_type,data}}`）——两格式不同，别把 OpenAI 序列化喂给 Anthropic（Claude 会收不到图）。
 - **角色年龄字段（schema v17）**：`Characters.virtualAge`（虚拟年龄 = 角色对外呈现/自称的年龄，被问就答这个）+ `realAge`（真实年龄 = 设定内实际年龄，仅作幕后「已成年」背书、不对外透露）。聊天 `_systemPromptSections` 注入 `【年龄】` 段（只注入非空字段；两字段都填时追加「被问及年龄按对外年龄回答」）。自由文本、不随 SillyTavern 导出、不做内容拦截。
 - **批量导入**：file_picker 13 的 `FilePicker.pickFiles(...)` 返回 `List<PlatformFile>`（**本就多选，无 `allowMultiple` 参数**），`FilePicker.pickFile` 返回单个 `PlatformFile?`。导入页遍历全部文件、汇总成功/失败数。
 - **联系人列表排序 + 置顶**：`Characters.pinnedAt`（null=未置顶）。列表按「置顶区(pinnedAt 倒序) + 拼音首字母分组 A-Z/#」排序，右侧 A-Z 索引条（懒加载 `ListView.builder`，`ScrollController` + 固定行高 offset 估算跳分组）。中文首字母用 `lpinyin`（`core/utils/pinyin.dart` 的 `pinyinInitial`：英文→大写首字母，中文→拼音首字母，数字/符号→#）。置顶/删除走长按底部菜单（`showModalBottomSheet`）。
@@ -167,6 +169,7 @@ lib/
 9. **别跑 `flutter clean`（会清掉 sqlite3 原生资产、重建连不上 GitHub）**：`sqlite3` 包的 native assets 钩子要从 GitHub 下载预编译 `.so`（`github.com/simolus3/sqlite3.dart/releases`），中国网络连不上 github。`flutter clean` 删掉 `.dart_tool/hooks_runner/shared/sqlite3/build/download-<hash 前8位>/libsqlite3.so` 缓存后，重建就报 `Building assets for package:sqlite3 failed`（SocketException timeout）。恢复：用 GitHub 代理 `https://gh-proxy.com/https://github.com/...` 下回 3 个 ABI 的 `.so`（arm/arm64/x64 的 sha256 见 `sqlite3` 包 `lib/src/hook/asset_hashes.dart`），按 `download-<hash 前8位>` 放回上面缓存目录即可。另外，`pubspec.yaml` 里 `assets/` 目录声明**不包含子目录**——新增 `assets/xxx/` 子目录要显式加 `- assets/xxx/`（如 `assets/assistant_avatars/`），否则打不进包。
 10. **HTML 面板渲染的已知限制**：regex_scripts 产出的面板（微信/论坛/状态栏）由 core 版 `HtmlWidget` 渲染，**非像素级还原**——core 包不支持 `<svg>` 图标（论坛面板的点赞/转发图标显示为空，装饰性）、面板为「响应式堆叠」而非原 flex 布局；远程图 `files.catbox.moe` 在国内 **SSL 握手失败**加载不出（网络问题，非代码 bug，后续方向=导入时离线缓存远程图）。
 11. **PDF 渲染成图走不通**：`pdf_render` 用旧 v1 插件 API（`Registrar`）与 Flutter 3.47 不兼容（`Unresolved reference 'Registrar'`）；`pdfrx` 构建时从 github.com 下载 pdfium（同 sqlite3 原生资产坑，见上面第 9 条）。当前上传 PDF 只显示文件卡片、不读内容；要支持需离线缓存 pdfium 或换直接收 PDF 的多模态 API。
+12. **Kotlin 增量编译缓存被锁**：Windows 上 `flutter build apk` 偶发报 `Could not close incremental caches in .../kotlin/...`（`webview_flutter_android`/`android_file_picker` 等模块轮流出现，清 `build/` 无效）——Kotlin 增量编译的 `.tab` 缓存被杀软/守护进程锁住。已在 `android/gradle.properties` 加 `kotlin.incremental=false` + `kotlin.compiler.execution.strategy=in-process` 规避（略降构建速度，换稳定）。
 
 ## 当前进度
 
@@ -197,5 +200,7 @@ lib/
 本轮新增（1.17.33–1.17.36）：聊天上传附件（📎 选图/文件 → 暂存 chip → 输入要求再发）；图片走多模态 `ChatMessage.images` 发给模型识图、文本文件读内容发角色、其他文件显示文件卡片 + 发「收到文件」；PDF 渲染成图未做（见已知问题）。
 
 本轮新增（1.17.37–1.17.38）：助手出卡完成后「为这张卡配图？」弹窗（#19，多选图作封面/头像/图库，修时序竞态——drift watch 送达滞后时短暂重试）；角色卡导出为 PNG 下载/分享（#13，`PngCardWriter` 写 `chara` tEXt chunk + `share_plus`）；HTML 卡创作提示（#16，assistant prompt + `html_sanitize.dart` 抽出 `sanitizeHtml` 供气泡渲染复用）。
+
+本轮新增（1.17.39–1.17.43）：助手出卡导入健壮性——`detectImportable`/`StCardParser` 解开 V2 `data` 包装 + 顶层 `name` 回退 + 空名拒绝（按钮不再「出现后又报缺 name」）；Anthropic 多模态图片序列化（`ChatMessage.toAnthropicJson`，修 Claude 收不到图）；助手出卡配图可重复触发（卡片下常驻「配图」按钮，跳过弹窗后仍可补图）；助手角色卡支持发图（本地配图按 `<img="名字">` 声明名映射 + 网络图 `<img src=url>`）；Kotlin 增量编译锁缓存加 `kotlin.incremental=false`（见已知问题 #12）。
 
 未实现（后续阶段）：向量召回、FTS5 全文索引、WorkManager 定时后台任务、故障转移（多 Provider 自动切换）。
