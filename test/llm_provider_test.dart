@@ -22,4 +22,25 @@ void main() {
       'image_url': {'url': 'data:image/png;base64,AAAA'},
     });
   });
+
+  test('ChatMessage.toAnthropicJson stays text-only without images', () {
+    const m = ChatMessage(role: 'user', content: 'hi');
+    expect(m.toAnthropicJson(), {'role': 'user', 'content': 'hi'});
+  });
+
+  test('ChatMessage.toAnthropicJson emits Anthropic image blocks', () {
+    const m = ChatMessage(
+      role: 'user',
+      content: '看这张图',
+      images: ['data:image/png;base64,AAAA'],
+    );
+    final json = m.toAnthropicJson();
+    expect(json['role'], 'user');
+    final content = json['content'] as List;
+    expect(content[0], {'type': 'text', 'text': '看这张图'});
+    expect(content[1], {
+      'type': 'image',
+      'source': {'type': 'base64', 'media_type': 'image/png', 'data': 'AAAA'},
+    });
+  });
 }

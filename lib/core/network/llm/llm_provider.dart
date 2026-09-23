@@ -33,6 +33,31 @@ class ChatMessage {
       ],
     };
   }
+
+  /// Anthropic Messages API wire format: image blocks use
+  /// `{type: image, source: {type: base64, media_type, data}}` (raw base64,
+  /// no `data:` prefix), unlike [toJson]'s OpenAI `image_url` blocks.
+  Map<String, dynamic> toAnthropicJson() {
+    if (images.isEmpty) return {'role': role, 'content': content};
+    return {
+      'role': role,
+      'content': [
+        {'type': 'text', 'text': content},
+        for (final img in images) _anthropicImageBlock(img),
+      ],
+    };
+  }
+
+  static Map<String, dynamic> _anthropicImageBlock(String dataUrl) {
+    final match = RegExp(r'^data:([^;,]+);base64,(.+)$', dotAll: true)
+        .firstMatch(dataUrl);
+    final mime = match?.group(1) ?? 'image/png';
+    final data = match?.group(2) ?? dataUrl.split(',').last;
+    return {
+      'type': 'image',
+      'source': {'type': 'base64', 'media_type': mime, 'data': data},
+    };
+  }
 }
 
 class ChatRequest {

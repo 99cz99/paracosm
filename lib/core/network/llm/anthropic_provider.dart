@@ -40,7 +40,7 @@ class AnthropicProvider implements LlmProvider {
     // Anthropic forbids a "system" role inside messages; it lives top-level.
     final messages = request.messages
         .where((m) => m.role != 'system')
-        .map((m) => m.toJson())
+        .map((m) => m.toAnthropicJson())
         .toList();
 
     final body = <String, dynamic>{
