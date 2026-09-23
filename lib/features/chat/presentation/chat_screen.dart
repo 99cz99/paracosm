@@ -250,6 +250,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
     if (ok != true || !mounted) return;
+    await _pickCardImages(messageId);
+  }
+
+  /// Picks portrait images for a card message and stores them in [_cardImages].
+  /// Re-triggerable — also reachable via the 「配图」 button under the card, so
+  /// skipping the one-shot [_askCardImage] prompt doesn't lock the user out.
+  Future<void> _pickCardImages(String messageId) async {
     final files = await FilePicker.pickFiles(type: FileType.image);
     if (files.isEmpty) return;
     final bytes = <List<int>>[];
@@ -262,7 +269,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         // Best-effort: a bad pick shouldn't crash.
       }
     }
-    if (bytes.isNotEmpty) _cardImages[messageId] = bytes;
+    if (bytes.isNotEmpty && mounted) {
+      setState(() => _cardImages[messageId] = bytes);
+    }
   }
 
   // --- Slash-command popup ---
@@ -704,6 +713,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               importable.kind == ImportableKind.character
                                   ? () => _downloadPngCard(importable, msg.id)
                                   : null,
+                          onAttachImage:
+                              importable.kind == ImportableKind.character
+                                  ? () => _pickCardImages(msg.id)
+                                  : null,
+                          imageCount: _cardImages[msg.id]?.length ?? 0,
                         ),
                     ],
                   );
@@ -1266,17 +1280,22 @@ class _StreamingBubble extends ConsumerWidget {
 }
 
 /// A one-tap import button shown under an assistant message whose content is an
-/// importable card / world / worldbook.
+/// importable card / world / worldbook. Character cards additionally get a
+/// re-triggerable 「配图」 button and a 「下载 PNG 卡」 button.
 class _ImportButton extends StatelessWidget {
   const _ImportButton({
     required this.kind,
     required this.onTap,
     this.onDownload,
+    this.onAttachImage,
+    this.imageCount = 0,
   });
 
   final ImportableKind kind;
   final VoidCallback onTap;
   final VoidCallback? onDownload;
+  final VoidCallback? onAttachImage;
+  final int imageCount;
 
   String get _label => switch (kind) {
         ImportableKind.character => '导入角色卡',
@@ -1286,22 +1305,27 @@ class _ImportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final import = TextButton.icon(
-      onPressed: onTap,
-      icon: const Icon(Icons.download_outlined, size: 18),
-      label: Text(_label),
-    );
-    if (onDownload == null) return import;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        import,
-        TextButton.icon(
-          onPressed: onDownload,
-          icon: const Icon(Icons.ios_share, size: 18),
-          label: const Text('下载 PNG 卡'),
-        ),
-      ],
-    );
+    final buttons = <Widget>[
+      TextButton.icon(
+        onPressed: onTap,
+        icon: const Icon(Icons.download_outlined, size: 18),
+        label: Text(_label),
+      ),
+    ];
+    if (onAttachImage != null) {
+      buttons.add(TextButton.icon(
+        onPressed: onAttachImage,
+        icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+        label: Text(imageCount > 0 ? '配图（$imageCount）' : '配图'),
+      ));
+    }
+    if (onDownload != null) {
+      buttons.add(TextButton.icon(
+        onPressed: onDownload,
+        icon: const Icon(Icons.ios_share, size: 18),
+        label: const Text('下载 PNG 卡'),
+      ));
+    }
+    return Row(mainAxisSize: MainAxisSize.min, children: buttons);
   }
 }
