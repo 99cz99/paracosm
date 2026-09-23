@@ -62,6 +62,20 @@ const characterSpec = Doc('角色卡制作规范', [
         '{"name":...,"description":...,"entries":[{"comment":...,"keys":[...],"content":...}]}。',
     '命中关键词即在单聊自动注入，详情页「参考资料」可查看；不会写进世界书库。',
   ]),
+  DocSection('角色图库与发图', [
+    '角色卡可携带图库，导入后聊天里用 <img="图片名"> 引用（图片名对应图库条目名，命中即在消息里显示该图）。',
+    '也可写 <img src="https://图片地址"> 引用网络图（需可直连的图床）。',
+    '图片来源：V3 assets（icon 作头像，emotion / background 作图库）、'
+        'extensions.risuai.additionalAssets（[名字, base64]）、extensions.chub.expressions、'
+        'Skill ZIP 里的图片文件（文件名作名字）。',
+  ]),
+  DocSection('HTML 与正则脚本', [
+    '文本字段（first_mes / description 等）可内嵌 HTML：<b>加粗</b>、<i>斜体</i>、'
+        '<span style="color:#ff0000">文字色</span>、<div>分块</div>、'
+        '<details><summary>折叠标题</summary>展开内容</details>、<style>+class（导入后 CSS 内联）。',
+    '复杂替换 / 面板用 data.extensions.regex_scripts 数组：'
+        '{"findRegex":"/正则/i","replaceString":"替换（\$1 反向引用）","markdownOnly":true,"placement":[2]}。',
+  ]),
   DocSection('JSON 示例（骨架，字段值自行填写）', [
     '{\n'
     '  "name": "【自行填写】",\n'
@@ -206,16 +220,24 @@ const manualDoc = Doc('软件使用手册', [
     'token 面板：显示本会话累计消耗（真实 usage）；「我 → 实时 Token 显示」可开关顶部 token 估算。',
     '超过模型上下文窗口上限时，会自动裁剪最早的历史（已进摘要的部分，安全）。',
   ]),
+  DocSection('外观颜色', [
+    '可自定义用户 / 角色气泡色与文字色：全局在「我」页设置，单会话在聊天页「会话设置」里覆盖。',
+  ]),
   DocSection('单聊', [
     'SSE 流式回复，切后台继续生成。',
     '开场白：用户回复前可用 ← / 🎲 / → 切换开场白。',
     '消息撤回：长按消息 → 选中工具条 →「撤回」。',
+  ]),
+  DocSection('附件与图片识图', [
+    '聊天输入框 📎 可上传图片 / 文件：图片发给模型识图（需视觉模型，如 deepseek-flash、'
+        'GLM-4V；纯文本模型读不了图），文本文件读内容发出，其他文件显示为文件卡片。',
   ]),
   DocSection('群聊', [
     '多角色同屏，三种发言模式：auto（AI 决定）/ turn（轮流）/ call（点名 @角色）。',
     '群信息页可增删成员、改角色名、换头像、解散群。',
     '「代入角色记忆」开关：开启后给每个成员注入其在对应世界的记忆。',
     '角色对关系：每对角色间的关系 / 亲密度会随对话自动抽取。',
+    '自动发言规则：群信息页可配置（正则触发 + 延迟 + 概率），回合结束后自动让指定角色发言。',
   ]),
   DocSection('剧情', [
     'AI 生成分支剧情；选择时复用已生成分支，未命中才生成。',
@@ -236,6 +258,8 @@ const manualDoc = Doc('软件使用手册', [
   ]),
   DocSection('助手与制作规范', [
     '我 → 助手：角色 / 世界 / 世界书制作助手 + 软件使用助手；助手消息里含可导入 JSON 时，点「导入」按钮一键落库。',
+    '角色制作助手出的卡可带图：卡里写 <img="名字">（导入时用「配图」按钮传图，按声明顺序映射）'
+        '或 <img src="url">（网络图）；「配图」按钮常驻卡片下方，跳过弹窗后仍可随时补图。',
     '我 → 制作规范：角色卡 / 世界 / 世界书 / 角色包四份制作规范。',
   ]),
   DocSection('搜索', [
