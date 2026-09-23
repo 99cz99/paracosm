@@ -86,7 +86,8 @@ ImportableKind? _classify(String json) {
     // Worldbook: an entries array.
     if (map['entries'] is List) return ImportableKind.worldbook;
     // Character card: SillyTavern V2/V3 wrap fields under `data`, V1 is flat
-    // (mirror StCardParser.parseMap).
+    // (mirror StCardParser.parseMap). `name` may sit at the top level beside
+    // `data` on non-standard cards — accept both.
     final card = map['data'] is Map<String, dynamic>
         ? map['data'] as Map<String, dynamic>
         : map;
@@ -98,9 +99,12 @@ ImportableKind? _classify(String json) {
       'system_prompt',
       'mes_example',
     ];
-    if (card['name'] is String &&
-        (card['name'] as String).trim().isNotEmpty &&
-        card.keys.any(cardFields.contains)) {
+    final nameValue = card['name'] ?? map['name'];
+    final hasCardField =
+        card.keys.any(cardFields.contains) || map.keys.any(cardFields.contains);
+    if (nameValue is String &&
+        nameValue.trim().isNotEmpty &&
+        hasCardField) {
       return ImportableKind.character;
     }
     return null;

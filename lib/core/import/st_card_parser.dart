@@ -28,7 +28,9 @@ class StCardParser {
         ? root['data'] as Map<String, dynamic>
         : root;
 
-    final name = (data['name'] ?? '').toString().trim();
+    // `name` usually lives inside `data` (V2/V3); a non-standard card may place
+    // it at the top level beside `data` — fall back so it's still accepted.
+    final name = (data['name'] ?? root['name'] ?? '').toString().trim();
     if (name.isEmpty) {
       throw AppException('角色卡缺少 name 字段');
     }

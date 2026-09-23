@@ -15,6 +15,13 @@ void main() {
     expect(r?.kind, ImportableKind.character);
   });
 
+  test('detects a character card with name at top level beside data', () {
+    const json = '{"spec":"chara_card_v2","name":"猫娘",'
+        '"data":{"description":"傲娇"}}';
+    final r = detectImportable(json);
+    expect(r?.kind, ImportableKind.character);
+  });
+
   test('detects a V2 card inside a code fence', () {
     const json = '```json\n'
         '{"spec":"chara_card_v2","spec_version":"2.0",'
