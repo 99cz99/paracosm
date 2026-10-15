@@ -614,7 +614,9 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
 
   String? _joinSections(List<PromptSection> sections) {
     if (sections.isEmpty) return null;
-    return sections.map((s) => s.text).join('\n\n');
+    // Expand {{setvar}}/{{getvar}} across the WHOLE assembled prompt, so a
+    // variable defined in one preset can be referenced by another.
+    return expandStVariables(sections.map((s) => s.text).join('\n\n'));
   }
 
   /// Estimates the token usage of the next would-be request (approximation).
