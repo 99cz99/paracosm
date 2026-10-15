@@ -224,4 +224,6 @@ lib/
 
 本轮新增（1.19.0）：**系统提示词预设库**（schema v23）。新增 `SystemPromptPresets`（独立库：id/name/content/description）+ `CharacterSystemPrompts`（角色↔预设多对多）两表，仿世界书库模式。导入导出 `lib/core/import/system_prompt_preset.dart`（`exportSystemPromptPresetJson` / `parseSystemPromptImport`，支持 JSON `{name, content|prompt|system_prompt}` + 纯文本 .txt/.md）。管理页 `system_prompt_preset_screen.dart`（「我 → 系统提示词预设」，导入/新建/编辑/导出/删除）；角色详情「系统提示词预设」卡片可多选绑定/解绑；聊天 `chat_controller._systemPromptPresetSections` 把绑定预设作为无 `【】` 头的 raw 段注入 system prompt（占位符替换由 `_buildSections` 统一处理）。进备份（`backup_service.dart` 加两张表）。⚠️ 群聊/剧情注入未做（后续仿 `group_service.dart` 按成员注入）。
 
+本轮新增（1.19.1）：**系统提示词预设导入支持酒馆多格式** + **正则脚本独立导入**。`parseSystemPromptImport` 改为返回 `List`，识别三种形状——简单 `{name, content|prompt|system_prompt}`、提示词模板 `{prompt:[{role,content}]}`（拼成 1 条）、设置导出 `{prompts:[{name,content,system_prompt}]}`（优先 `system_prompt=true` 块，否则全部非空块）；正则脚本（`scriptName`/`findRegex`）正确拒绝。正则脚本独立导入 `lib/core/import/regex_script.dart` 的 `parseRegexScriptImport`（单对象或数组），角色编辑页「导入正则脚本」按钮 append 进 `core['regex_scripts']`（复用现有 `applyRegexScripts`/`applyPromptRegexScripts`，无需新表）。
+
 未实现（后续阶段）：FTS5 全文索引、WorkManager 定时后台任务、故障转移（多 Provider 自动切换）。
