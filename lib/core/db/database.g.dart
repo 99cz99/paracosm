@@ -5407,6 +5407,17 @@ class $ProviderConfigsTable extends ProviderConfigs
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _embeddingModelMeta = const VerificationMeta(
+    'embeddingModel',
+  );
+  @override
+  late final GeneratedColumn<String> embeddingModel = GeneratedColumn<String>(
+    'embedding_model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _contextWindowLimitMeta =
       const VerificationMeta('contextWindowLimit');
   @override
@@ -5464,6 +5475,7 @@ class $ProviderConfigsTable extends ProviderConfigs
     apiKeyRef,
     extraParamsJson,
     memoryModel,
+    embeddingModel,
     contextWindowLimit,
     isDefault,
     createdAt,
@@ -5542,6 +5554,15 @@ class $ProviderConfigsTable extends ProviderConfigs
         ),
       );
     }
+    if (data.containsKey('embedding_model')) {
+      context.handle(
+        _embeddingModelMeta,
+        embeddingModel.isAcceptableOrUnknown(
+          data['embedding_model']!,
+          _embeddingModelMeta,
+        ),
+      );
+    }
     if (data.containsKey('context_window_limit')) {
       context.handle(
         _contextWindowLimitMeta,
@@ -5614,6 +5635,10 @@ class $ProviderConfigsTable extends ProviderConfigs
         DriftSqlType.string,
         data['${effectivePrefix}memory_model'],
       ),
+      embeddingModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}embedding_model'],
+      ),
       contextWindowLimit: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}context_window_limit'],
@@ -5655,6 +5680,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
   /// 记忆抽取/摘要用的模型名（可选，留空则用 [model]；用于「便宜模型」）。
   final String? memoryModel;
 
+  /// 向量召回用的 embedding 模型名（可选，留空则该 provider 不支持 embedding）。
+  final String? embeddingModel;
+
   /// 模型上下文窗口上限（token 数），用于实时 token 显示；null = 用默认 32000。
   final int? contextWindowLimit;
   final bool isDefault;
@@ -5669,6 +5697,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     required this.apiKeyRef,
     required this.extraParamsJson,
     this.memoryModel,
+    this.embeddingModel,
     this.contextWindowLimit,
     required this.isDefault,
     required this.createdAt,
@@ -5686,6 +5715,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     map['extra_params_json'] = Variable<String>(extraParamsJson);
     if (!nullToAbsent || memoryModel != null) {
       map['memory_model'] = Variable<String>(memoryModel);
+    }
+    if (!nullToAbsent || embeddingModel != null) {
+      map['embedding_model'] = Variable<String>(embeddingModel);
     }
     if (!nullToAbsent || contextWindowLimit != null) {
       map['context_window_limit'] = Variable<int>(contextWindowLimit);
@@ -5708,6 +5740,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       memoryModel: memoryModel == null && nullToAbsent
           ? const Value.absent()
           : Value(memoryModel),
+      embeddingModel: embeddingModel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingModel),
       contextWindowLimit: contextWindowLimit == null && nullToAbsent
           ? const Value.absent()
           : Value(contextWindowLimit),
@@ -5731,6 +5766,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       apiKeyRef: serializer.fromJson<String>(json['apiKeyRef']),
       extraParamsJson: serializer.fromJson<String>(json['extraParamsJson']),
       memoryModel: serializer.fromJson<String?>(json['memoryModel']),
+      embeddingModel: serializer.fromJson<String?>(json['embeddingModel']),
       contextWindowLimit: serializer.fromJson<int?>(json['contextWindowLimit']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
@@ -5749,6 +5785,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       'apiKeyRef': serializer.toJson<String>(apiKeyRef),
       'extraParamsJson': serializer.toJson<String>(extraParamsJson),
       'memoryModel': serializer.toJson<String?>(memoryModel),
+      'embeddingModel': serializer.toJson<String?>(embeddingModel),
       'contextWindowLimit': serializer.toJson<int?>(contextWindowLimit),
       'isDefault': serializer.toJson<bool>(isDefault),
       'createdAt': serializer.toJson<int>(createdAt),
@@ -5765,6 +5802,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     String? apiKeyRef,
     String? extraParamsJson,
     Value<String?> memoryModel = const Value.absent(),
+    Value<String?> embeddingModel = const Value.absent(),
     Value<int?> contextWindowLimit = const Value.absent(),
     bool? isDefault,
     int? createdAt,
@@ -5778,6 +5816,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     apiKeyRef: apiKeyRef ?? this.apiKeyRef,
     extraParamsJson: extraParamsJson ?? this.extraParamsJson,
     memoryModel: memoryModel.present ? memoryModel.value : this.memoryModel,
+    embeddingModel: embeddingModel.present
+        ? embeddingModel.value
+        : this.embeddingModel,
     contextWindowLimit: contextWindowLimit.present
         ? contextWindowLimit.value
         : this.contextWindowLimit,
@@ -5799,6 +5840,9 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
       memoryModel: data.memoryModel.present
           ? data.memoryModel.value
           : this.memoryModel,
+      embeddingModel: data.embeddingModel.present
+          ? data.embeddingModel.value
+          : this.embeddingModel,
       contextWindowLimit: data.contextWindowLimit.present
           ? data.contextWindowLimit.value
           : this.contextWindowLimit,
@@ -5819,6 +5863,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
           ..write('apiKeyRef: $apiKeyRef, ')
           ..write('extraParamsJson: $extraParamsJson, ')
           ..write('memoryModel: $memoryModel, ')
+          ..write('embeddingModel: $embeddingModel, ')
           ..write('contextWindowLimit: $contextWindowLimit, ')
           ..write('isDefault: $isDefault, ')
           ..write('createdAt: $createdAt, ')
@@ -5837,6 +5882,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
     apiKeyRef,
     extraParamsJson,
     memoryModel,
+    embeddingModel,
     contextWindowLimit,
     isDefault,
     createdAt,
@@ -5854,6 +5900,7 @@ class ProviderConfig extends DataClass implements Insertable<ProviderConfig> {
           other.apiKeyRef == this.apiKeyRef &&
           other.extraParamsJson == this.extraParamsJson &&
           other.memoryModel == this.memoryModel &&
+          other.embeddingModel == this.embeddingModel &&
           other.contextWindowLimit == this.contextWindowLimit &&
           other.isDefault == this.isDefault &&
           other.createdAt == this.createdAt &&
@@ -5869,6 +5916,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
   final Value<String> apiKeyRef;
   final Value<String> extraParamsJson;
   final Value<String?> memoryModel;
+  final Value<String?> embeddingModel;
   final Value<int?> contextWindowLimit;
   final Value<bool> isDefault;
   final Value<int> createdAt;
@@ -5883,6 +5931,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     this.apiKeyRef = const Value.absent(),
     this.extraParamsJson = const Value.absent(),
     this.memoryModel = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
     this.contextWindowLimit = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -5898,6 +5947,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     this.apiKeyRef = const Value.absent(),
     this.extraParamsJson = const Value.absent(),
     this.memoryModel = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
     this.contextWindowLimit = const Value.absent(),
     this.isDefault = const Value.absent(),
     required int createdAt,
@@ -5919,6 +5969,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     Expression<String>? apiKeyRef,
     Expression<String>? extraParamsJson,
     Expression<String>? memoryModel,
+    Expression<String>? embeddingModel,
     Expression<int>? contextWindowLimit,
     Expression<bool>? isDefault,
     Expression<int>? createdAt,
@@ -5934,6 +5985,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
       if (apiKeyRef != null) 'api_key_ref': apiKeyRef,
       if (extraParamsJson != null) 'extra_params_json': extraParamsJson,
       if (memoryModel != null) 'memory_model': memoryModel,
+      if (embeddingModel != null) 'embedding_model': embeddingModel,
       if (contextWindowLimit != null)
         'context_window_limit': contextWindowLimit,
       if (isDefault != null) 'is_default': isDefault,
@@ -5952,6 +6004,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     Value<String>? apiKeyRef,
     Value<String>? extraParamsJson,
     Value<String?>? memoryModel,
+    Value<String?>? embeddingModel,
     Value<int?>? contextWindowLimit,
     Value<bool>? isDefault,
     Value<int>? createdAt,
@@ -5967,6 +6020,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
       apiKeyRef: apiKeyRef ?? this.apiKeyRef,
       extraParamsJson: extraParamsJson ?? this.extraParamsJson,
       memoryModel: memoryModel ?? this.memoryModel,
+      embeddingModel: embeddingModel ?? this.embeddingModel,
       contextWindowLimit: contextWindowLimit ?? this.contextWindowLimit,
       isDefault: isDefault ?? this.isDefault,
       createdAt: createdAt ?? this.createdAt,
@@ -6002,6 +6056,9 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
     if (memoryModel.present) {
       map['memory_model'] = Variable<String>(memoryModel.value);
     }
+    if (embeddingModel.present) {
+      map['embedding_model'] = Variable<String>(embeddingModel.value);
+    }
     if (contextWindowLimit.present) {
       map['context_window_limit'] = Variable<int>(contextWindowLimit.value);
     }
@@ -6031,6 +6088,7 @@ class ProviderConfigsCompanion extends UpdateCompanion<ProviderConfig> {
           ..write('apiKeyRef: $apiKeyRef, ')
           ..write('extraParamsJson: $extraParamsJson, ')
           ..write('memoryModel: $memoryModel, ')
+          ..write('embeddingModel: $embeddingModel, ')
           ..write('contextWindowLimit: $contextWindowLimit, ')
           ..write('isDefault: $isDefault, ')
           ..write('createdAt: $createdAt, ')
@@ -9512,6 +9570,477 @@ class GroupMemoriesCompanion extends UpdateCompanion<GroupMemory> {
           ..write('summaryText: $summaryText, ')
           ..write('summaryIndex: $summaryIndex, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MemoryVectorsTable extends MemoryVectors
+    with TableInfo<$MemoryVectorsTable, MemoryVector> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MemoryVectorsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _characterIdMeta = const VerificationMeta(
+    'characterId',
+  );
+  @override
+  late final GeneratedColumn<String> characterId = GeneratedColumn<String>(
+    'character_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _worldIdMeta = const VerificationMeta(
+    'worldId',
+  );
+  @override
+  late final GeneratedColumn<String> worldId = GeneratedColumn<String>(
+    'world_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _embeddingJsonMeta = const VerificationMeta(
+    'embeddingJson',
+  );
+  @override
+  late final GeneratedColumn<String> embeddingJson = GeneratedColumn<String>(
+    'embedding_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    characterId,
+    worldId,
+    kind,
+    content,
+    embeddingJson,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'memory_vectors';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MemoryVector> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('character_id')) {
+      context.handle(
+        _characterIdMeta,
+        characterId.isAcceptableOrUnknown(
+          data['character_id']!,
+          _characterIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('world_id')) {
+      context.handle(
+        _worldIdMeta,
+        worldId.isAcceptableOrUnknown(data['world_id']!, _worldIdMeta),
+      );
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('embedding_json')) {
+      context.handle(
+        _embeddingJsonMeta,
+        embeddingJson.isAcceptableOrUnknown(
+          data['embedding_json']!,
+          _embeddingJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_embeddingJsonMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MemoryVector map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MemoryVector(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      characterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}character_id'],
+      ),
+      worldId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}world_id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      embeddingJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}embedding_json'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $MemoryVectorsTable createAlias(String alias) {
+    return $MemoryVectorsTable(attachedDatabase, alias);
+  }
+}
+
+class MemoryVector extends DataClass implements Insertable<MemoryVector> {
+  final String id;
+  final String? characterId;
+  final String worldId;
+  final String kind;
+  final String content;
+  final String embeddingJson;
+  final int createdAt;
+  const MemoryVector({
+    required this.id,
+    this.characterId,
+    required this.worldId,
+    required this.kind,
+    required this.content,
+    required this.embeddingJson,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || characterId != null) {
+      map['character_id'] = Variable<String>(characterId);
+    }
+    map['world_id'] = Variable<String>(worldId);
+    map['kind'] = Variable<String>(kind);
+    map['content'] = Variable<String>(content);
+    map['embedding_json'] = Variable<String>(embeddingJson);
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  MemoryVectorsCompanion toCompanion(bool nullToAbsent) {
+    return MemoryVectorsCompanion(
+      id: Value(id),
+      characterId: characterId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(characterId),
+      worldId: Value(worldId),
+      kind: Value(kind),
+      content: Value(content),
+      embeddingJson: Value(embeddingJson),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory MemoryVector.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MemoryVector(
+      id: serializer.fromJson<String>(json['id']),
+      characterId: serializer.fromJson<String?>(json['characterId']),
+      worldId: serializer.fromJson<String>(json['worldId']),
+      kind: serializer.fromJson<String>(json['kind']),
+      content: serializer.fromJson<String>(json['content']),
+      embeddingJson: serializer.fromJson<String>(json['embeddingJson']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'characterId': serializer.toJson<String?>(characterId),
+      'worldId': serializer.toJson<String>(worldId),
+      'kind': serializer.toJson<String>(kind),
+      'content': serializer.toJson<String>(content),
+      'embeddingJson': serializer.toJson<String>(embeddingJson),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  MemoryVector copyWith({
+    String? id,
+    Value<String?> characterId = const Value.absent(),
+    String? worldId,
+    String? kind,
+    String? content,
+    String? embeddingJson,
+    int? createdAt,
+  }) => MemoryVector(
+    id: id ?? this.id,
+    characterId: characterId.present ? characterId.value : this.characterId,
+    worldId: worldId ?? this.worldId,
+    kind: kind ?? this.kind,
+    content: content ?? this.content,
+    embeddingJson: embeddingJson ?? this.embeddingJson,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  MemoryVector copyWithCompanion(MemoryVectorsCompanion data) {
+    return MemoryVector(
+      id: data.id.present ? data.id.value : this.id,
+      characterId: data.characterId.present
+          ? data.characterId.value
+          : this.characterId,
+      worldId: data.worldId.present ? data.worldId.value : this.worldId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      content: data.content.present ? data.content.value : this.content,
+      embeddingJson: data.embeddingJson.present
+          ? data.embeddingJson.value
+          : this.embeddingJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemoryVector(')
+          ..write('id: $id, ')
+          ..write('characterId: $characterId, ')
+          ..write('worldId: $worldId, ')
+          ..write('kind: $kind, ')
+          ..write('content: $content, ')
+          ..write('embeddingJson: $embeddingJson, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    characterId,
+    worldId,
+    kind,
+    content,
+    embeddingJson,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MemoryVector &&
+          other.id == this.id &&
+          other.characterId == this.characterId &&
+          other.worldId == this.worldId &&
+          other.kind == this.kind &&
+          other.content == this.content &&
+          other.embeddingJson == this.embeddingJson &&
+          other.createdAt == this.createdAt);
+}
+
+class MemoryVectorsCompanion extends UpdateCompanion<MemoryVector> {
+  final Value<String> id;
+  final Value<String?> characterId;
+  final Value<String> worldId;
+  final Value<String> kind;
+  final Value<String> content;
+  final Value<String> embeddingJson;
+  final Value<int> createdAt;
+  final Value<int> rowid;
+  const MemoryVectorsCompanion({
+    this.id = const Value.absent(),
+    this.characterId = const Value.absent(),
+    this.worldId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.content = const Value.absent(),
+    this.embeddingJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MemoryVectorsCompanion.insert({
+    required String id,
+    this.characterId = const Value.absent(),
+    this.worldId = const Value.absent(),
+    required String kind,
+    required String content,
+    required String embeddingJson,
+    required int createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       kind = Value(kind),
+       content = Value(content),
+       embeddingJson = Value(embeddingJson),
+       createdAt = Value(createdAt);
+  static Insertable<MemoryVector> custom({
+    Expression<String>? id,
+    Expression<String>? characterId,
+    Expression<String>? worldId,
+    Expression<String>? kind,
+    Expression<String>? content,
+    Expression<String>? embeddingJson,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (characterId != null) 'character_id': characterId,
+      if (worldId != null) 'world_id': worldId,
+      if (kind != null) 'kind': kind,
+      if (content != null) 'content': content,
+      if (embeddingJson != null) 'embedding_json': embeddingJson,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MemoryVectorsCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? characterId,
+    Value<String>? worldId,
+    Value<String>? kind,
+    Value<String>? content,
+    Value<String>? embeddingJson,
+    Value<int>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return MemoryVectorsCompanion(
+      id: id ?? this.id,
+      characterId: characterId ?? this.characterId,
+      worldId: worldId ?? this.worldId,
+      kind: kind ?? this.kind,
+      content: content ?? this.content,
+      embeddingJson: embeddingJson ?? this.embeddingJson,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (characterId.present) {
+      map['character_id'] = Variable<String>(characterId.value);
+    }
+    if (worldId.present) {
+      map['world_id'] = Variable<String>(worldId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (embeddingJson.present) {
+      map['embedding_json'] = Variable<String>(embeddingJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemoryVectorsCompanion(')
+          ..write('id: $id, ')
+          ..write('characterId: $characterId, ')
+          ..write('worldId: $worldId, ')
+          ..write('kind: $kind, ')
+          ..write('content: $content, ')
+          ..write('embeddingJson: $embeddingJson, ')
+          ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -13253,6 +13782,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $GroupMessagesTable groupMessages = $GroupMessagesTable(this);
   late final $PairRelationsTable pairRelations = $PairRelationsTable(this);
   late final $GroupMemoriesTable groupMemories = $GroupMemoriesTable(this);
+  late final $MemoryVectorsTable memoryVectors = $MemoryVectorsTable(this);
   late final $StoriesTable stories = $StoriesTable(this);
   late final $StoryNodesTable storyNodes = $StoryNodesTable(this);
   late final $StorySavesTable storySaves = $StorySavesTable(this);
@@ -13292,6 +13822,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     groupMessages,
     pairRelations,
     groupMemories,
+    memoryVectors,
     stories,
     storyNodes,
     storySaves,
@@ -18117,6 +18648,7 @@ typedef $$ProviderConfigsTableCreateCompanionBuilder =
       Value<String> apiKeyRef,
       Value<String> extraParamsJson,
       Value<String?> memoryModel,
+      Value<String?> embeddingModel,
       Value<int?> contextWindowLimit,
       Value<bool> isDefault,
       required int createdAt,
@@ -18133,6 +18665,7 @@ typedef $$ProviderConfigsTableUpdateCompanionBuilder =
       Value<String> apiKeyRef,
       Value<String> extraParamsJson,
       Value<String?> memoryModel,
+      Value<String?> embeddingModel,
       Value<int?> contextWindowLimit,
       Value<bool> isDefault,
       Value<int> createdAt,
@@ -18186,6 +18719,11 @@ class $$ProviderConfigsTableFilterComposer
 
   ColumnFilters<String> get memoryModel => $composableBuilder(
     column: $table.memoryModel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18259,6 +18797,11 @@ class $$ProviderConfigsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get contextWindowLimit => $composableBuilder(
     column: $table.contextWindowLimit,
     builder: (column) => ColumnOrderings(column),
@@ -18314,6 +18857,11 @@ class $$ProviderConfigsTableAnnotationComposer
 
   GeneratedColumn<String> get memoryModel => $composableBuilder(
     column: $table.memoryModel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
     builder: (column) => column,
   );
 
@@ -18377,6 +18925,7 @@ class $$ProviderConfigsTableTableManager
                 Value<String> apiKeyRef = const Value.absent(),
                 Value<String> extraParamsJson = const Value.absent(),
                 Value<String?> memoryModel = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
                 Value<int?> contextWindowLimit = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
@@ -18391,6 +18940,7 @@ class $$ProviderConfigsTableTableManager
                 apiKeyRef: apiKeyRef,
                 extraParamsJson: extraParamsJson,
                 memoryModel: memoryModel,
+                embeddingModel: embeddingModel,
                 contextWindowLimit: contextWindowLimit,
                 isDefault: isDefault,
                 createdAt: createdAt,
@@ -18407,6 +18957,7 @@ class $$ProviderConfigsTableTableManager
                 Value<String> apiKeyRef = const Value.absent(),
                 Value<String> extraParamsJson = const Value.absent(),
                 Value<String?> memoryModel = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
                 Value<int?> contextWindowLimit = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 required int createdAt,
@@ -18421,6 +18972,7 @@ class $$ProviderConfigsTableTableManager
                 apiKeyRef: apiKeyRef,
                 extraParamsJson: extraParamsJson,
                 memoryModel: memoryModel,
+                embeddingModel: embeddingModel,
                 contextWindowLimit: contextWindowLimit,
                 isDefault: isDefault,
                 createdAt: createdAt,
@@ -21344,6 +21896,257 @@ typedef $$GroupMemoriesTableProcessedTableManager =
       (GroupMemory, $$GroupMemoriesTableReferences),
       GroupMemory,
       PrefetchHooks Function({bool groupId})
+    >;
+typedef $$MemoryVectorsTableCreateCompanionBuilder =
+    MemoryVectorsCompanion Function({
+      required String id,
+      Value<String?> characterId,
+      Value<String> worldId,
+      required String kind,
+      required String content,
+      required String embeddingJson,
+      required int createdAt,
+      Value<int> rowid,
+    });
+typedef $$MemoryVectorsTableUpdateCompanionBuilder =
+    MemoryVectorsCompanion Function({
+      Value<String> id,
+      Value<String?> characterId,
+      Value<String> worldId,
+      Value<String> kind,
+      Value<String> content,
+      Value<String> embeddingJson,
+      Value<int> createdAt,
+      Value<int> rowid,
+    });
+
+class $$MemoryVectorsTableFilterComposer
+    extends Composer<_$AppDatabase, $MemoryVectorsTable> {
+  $$MemoryVectorsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get worldId => $composableBuilder(
+    column: $table.worldId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get embeddingJson => $composableBuilder(
+    column: $table.embeddingJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MemoryVectorsTableOrderingComposer
+    extends Composer<_$AppDatabase, $MemoryVectorsTable> {
+  $$MemoryVectorsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get worldId => $composableBuilder(
+    column: $table.worldId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get embeddingJson => $composableBuilder(
+    column: $table.embeddingJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MemoryVectorsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MemoryVectorsTable> {
+  $$MemoryVectorsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get worldId =>
+      $composableBuilder(column: $table.worldId, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<String> get embeddingJson => $composableBuilder(
+    column: $table.embeddingJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$MemoryVectorsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MemoryVectorsTable,
+          MemoryVector,
+          $$MemoryVectorsTableFilterComposer,
+          $$MemoryVectorsTableOrderingComposer,
+          $$MemoryVectorsTableAnnotationComposer,
+          $$MemoryVectorsTableCreateCompanionBuilder,
+          $$MemoryVectorsTableUpdateCompanionBuilder,
+          (
+            MemoryVector,
+            BaseReferences<_$AppDatabase, $MemoryVectorsTable, MemoryVector>,
+          ),
+          MemoryVector,
+          PrefetchHooks Function()
+        > {
+  $$MemoryVectorsTableTableManager(_$AppDatabase db, $MemoryVectorsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MemoryVectorsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MemoryVectorsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MemoryVectorsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> characterId = const Value.absent(),
+                Value<String> worldId = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<String> embeddingJson = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MemoryVectorsCompanion(
+                id: id,
+                characterId: characterId,
+                worldId: worldId,
+                kind: kind,
+                content: content,
+                embeddingJson: embeddingJson,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> characterId = const Value.absent(),
+                Value<String> worldId = const Value.absent(),
+                required String kind,
+                required String content,
+                required String embeddingJson,
+                required int createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => MemoryVectorsCompanion.insert(
+                id: id,
+                characterId: characterId,
+                worldId: worldId,
+                kind: kind,
+                content: content,
+                embeddingJson: embeddingJson,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$MemoryVectorsTable, MemoryVector>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $MemoryVectorsTable,
+                    MemoryVector
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MemoryVectorsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MemoryVectorsTable,
+      MemoryVector,
+      $$MemoryVectorsTableFilterComposer,
+      $$MemoryVectorsTableOrderingComposer,
+      $$MemoryVectorsTableAnnotationComposer,
+      $$MemoryVectorsTableCreateCompanionBuilder,
+      $$MemoryVectorsTableUpdateCompanionBuilder,
+      (
+        MemoryVector,
+        BaseReferences<_$AppDatabase, $MemoryVectorsTable, MemoryVector>,
+      ),
+      MemoryVector,
+      PrefetchHooks Function()
     >;
 typedef $$StoriesTableCreateCompanionBuilder = StoriesCompanion Function({
   required String id,
@@ -25635,6 +26438,8 @@ class $AppDatabaseManager {
       $$PairRelationsTableTableManager(_db, _db.pairRelations);
   $$GroupMemoriesTableTableManager get groupMemories =>
       $$GroupMemoriesTableTableManager(_db, _db.groupMemories);
+  $$MemoryVectorsTableTableManager get memoryVectors =>
+      $$MemoryVectorsTableTableManager(_db, _db.memoryVectors);
   $$StoriesTableTableManager get stories =>
       $$StoriesTableTableManager(_db, _db.stories);
   $$StoryNodesTableTableManager get storyNodes =>

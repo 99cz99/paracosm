@@ -26,6 +26,13 @@ class _FixedJsonProvider implements LlmProvider {
 
   @override
   Future<void> cancel() async {}
+
+  @override
+  bool get supportsEmbeddings => false;
+
+  @override
+  Future<List<double>> embed(String text) async =>
+      throw UnsupportedError('no embeddings');
 }
 
 Future<AppDatabase> _dbWithCharacter({required String core}) async {

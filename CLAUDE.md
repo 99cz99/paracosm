@@ -65,6 +65,23 @@ adb install -r build/app/outputs/flutter-apk/app-debug.apk   # 分步执行，�
 adb shell am start -n com.paracosm.app/.MainActivity
 ```
 
+**发布到 GitHub Release**（通用 APK 发版流程，gh 已认证为 `99cz99`）：
+
+```bash
+# 1. bump 版本：编辑 pubspec.yaml 的 version（版本号与 build 号同步 +1，如 1.17.44+95 → 1.17.45+96）
+export PATH="/e/flutter/bin:/e/jdk/bin:$PATH"
+export ANDROID_HOME="E:/Android" JAVA_HOME="E:/jdk"
+flutter build apk --release --no-version-check    # 通用 APK → build/app/outputs/flutter-apk/app-release.apk（~73MB）
+cp build/app/outputs/flutter-apk/app-release.apk paracosm-<版本>.apk
+
+git add pubspec.yaml && git commit -m "chore: bump version to <版本>"
+git tag v<版本> && git push origin main --tags
+
+gh release create v<版本> paracosm-<版本>.apk --repo 99cz99/paracosm \
+  --title "Paracosm v<版本>" --notes "<说明>"
+rm -f paracosm-<版本>.apk   # 清理本地副本（.gitignore 未忽略 *.apk，别提交大文件）
+```
+
 ## 项目结构（feature-first）
 
 ```
@@ -203,4 +220,6 @@ lib/
 
 本轮新增（1.17.39–1.17.43）：助手出卡导入健壮性——`detectImportable`/`StCardParser` 解开 V2 `data` 包装 + 顶层 `name` 回退 + 空名拒绝（按钮不再「出现后又报缺 name」）；Anthropic 多模态图片序列化（`ChatMessage.toAnthropicJson`，修 Claude 收不到图）；助手出卡配图可重复触发（卡片下常驻「配图」按钮，跳过弹窗后仍可补图）；助手角色卡支持发图（本地配图按 `<img="名字">` 声明名映射 + 网络图 `<img src=url>`）；Kotlin 增量编译锁缓存加 `kotlin.incremental=false`（见已知问题 #12）。
 
-未实现（后续阶段）：向量召回、FTS5 全文索引、WorkManager 定时后台任务、故障转移（多 Provider 自动切换）。
+本轮新增（1.18.0）：**向量召回（聊天消息语义检索）** + **酒馆采样预设导入导出**。① Embedding 能力：`LlmProvider` 加 `supportsEmbeddings`/`embed()`（`OpenAiCompatibleProvider` 实现 `POST {baseUrl}/embeddings`，`AnthropicProvider` 不支持）；`ProviderConfigs` 加 `embeddingModel` 列（schema v22，仿 `memoryModel`）。② 存储：新增 `MemoryVectors` 表（`{id, characterId?, worldId, kind, content, embeddingJson}`，派生数据不进备份）+ `VectorStore`（`lib/core/memory/vector_store.dart`，余弦相似度纯 Dart 检索）。③ 注入：`chat_controller` 每轮把可见消息向量化（按 messageId 去重），`_buildSections` 检索 top-K 相关旧消息注入 `【相关记忆】`（排除已在上下文里的消息）。④ 开关：「我」页「语义记忆召回」SwitchListTile（`Settings.vector_recall_enabled`，默认关）。⑤ 采样预设导入导出：`lib/core/import/st_preset.dart`（`exportPresetJson`/`parseStPresetJson`，ST generation preset 字段映射 temperature/top_p/max_length/repetition_penalty_*），`preset_settings_screen` AppBar「导入」+ 长按「导出」。⚠️ 世界书语义匹配/结构化记忆向量召回暂未做（前者需异步重构 world_context + 逐条 embed 条目；后者与每轮直接注入的 `【历史摘要】`/`【当前状态】` 重复）。
+
+未实现（后续阶段）：FTS5 全文索引、WorkManager 定时后台任务、故障转移（多 Provider 自动切换）。

@@ -258,6 +258,7 @@ class BackupService {
         model: e['model'], apiKeyRef: Value(e['apiKeyRef']),
         extraParamsJson: Value(e['extraParamsJson']),
         memoryModel: Value(e['memoryModel'] as String?),
+        embeddingModel: Value(e['embeddingModel'] as String?),
         isDefault: Value(e['isDefault']),
         createdAt: e['createdAt'], updatedAt: e['updatedAt'],
       ));
@@ -398,7 +399,8 @@ class BackupService {
   Map<String, dynamic> _pc(ProviderConfig p) => {
         'id': p.id, 'name': p.name, 'type': p.type, 'baseUrl': p.baseUrl,
         'model': p.model, 'apiKeyRef': p.apiKeyRef, 'extraParamsJson': p.extraParamsJson,
-        'memoryModel': p.memoryModel, 'isDefault': p.isDefault,
+        'memoryModel': p.memoryModel, 'embeddingModel': p.embeddingModel,
+        'isDefault': p.isDefault,
         'createdAt': p.createdAt, 'updatedAt': p.updatedAt,
       };
   Map<String, dynamic> _wb(Worldbook b) => {

@@ -18,6 +18,13 @@ class MockStreamProvider implements LlmProvider {
   ProviderType get type => ProviderType.openaiCompatible;
 
   @override
+  bool get supportsEmbeddings => true;
+
+  @override
+  Future<List<double>> embed(String text) async =>
+      List<double>.filled(8, (text.length % 100).toDouble());
+
+  @override
   Stream<ChatChunk> streamChat(ChatRequest request) async* {
     final last = request.messages.isEmpty ? '' : request.messages.last.content;
     final reply = '（模拟回复）$last';

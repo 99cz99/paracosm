@@ -14,6 +14,7 @@ class LlmProviderConfig {
     this.apiKey = '',
     this.extraParams = const {},
     this.memoryModel,
+    this.embeddingModel,
     this.contextWindowLimit,
   });
 
@@ -27,6 +28,9 @@ class LlmProviderConfig {
 
   /// 记忆抽取/摘要用的模型名；为 null 时用 [model]。
   final String? memoryModel;
+
+  /// 向量召回用的 embedding 模型名；为 null 时该 provider 不支持 embedding。
+  final String? embeddingModel;
 
   /// 模型上下文窗口上限（token 数）；为 null 时用默认 32000。
   final int? contextWindowLimit;

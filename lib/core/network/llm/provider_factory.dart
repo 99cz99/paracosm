@@ -13,6 +13,7 @@ LlmProvider buildLlmProvider(LlmProviderConfig config) {
         model: config.model,
         apiKey: config.apiKey,
         extraParams: config.extraParams,
+        embeddingModel: config.embeddingModel,
       );
     case ProviderType.anthropic:
       return AnthropicProvider(

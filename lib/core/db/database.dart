@@ -26,6 +26,7 @@ part 'database.g.dart';
     GroupMessages,
     PairRelations,
     GroupMemories,
+    MemoryVectors,
     Stories,
     StoryNodes,
     StorySaves,
@@ -217,6 +218,11 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
             // Text color split per-role (user/assistant) instead of one column.
             await m.addColumn(sessions, sessions.userTextColor);
             await m.addColumn(sessions, sessions.assistantTextColor);
+          }
+          if (from < 22) {
+            // Embedding model per provider + vector-recall cache table.
+            await m.addColumn(providerConfigs, providerConfigs.embeddingModel);
+            await m.createTable(memoryVectors);
           }
         },
         beforeOpen: (details) async {
@@ -1071,12 +1077,15 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
     final characterId = session.characterId;
     final worldId = session.worldId ?? '';
     // Deleting a session also clears its world-scoped memory (state / summary /
-    // relation / growth) — memory is tied to the session's lifetime.
+    // relation / growth) — memory is tied to the session's lifetime — plus its
+    // message vectors so recalled content never leaks into a rebuilt session.
+    final messageIds = (await getMessages(id)).map((m) => m.id).toList();
     await transaction(() async {
       await (delete(sessions)..where((t) => t.id.equals(id))).go();
       await resetCharacterMemory(characterId, worldId);
       await resetCharacterRelation(characterId, worldId);
       await resetCharacterAffinity(characterId, worldId);
+      await deleteMemoryVectorsByIds(messageIds);
     });
   }
 
@@ -1273,6 +1282,50 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
 
   Future<void> deletePreset(String id) =>
       (delete(presets)..where((t) => t.id.equals(id))).go();
+
+  // ---------------------------------------------------------------------
+  // Memory vectors (semantic recall)
+  // ---------------------------------------------------------------------
+  Future<void> upsertMemoryVector(MemoryVectorsCompanion entry) =>
+      into(memoryVectors).insertOnConflictUpdate(entry);
+
+  Future<MemoryVector?> getMemoryVector(String id) =>
+      (select(memoryVectors)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<List<MemoryVector>> getMemoryVectors(
+    String? characterId,
+    String worldId,
+    String kind,
+  ) {
+    final query = select(memoryVectors)
+      ..where((t) {
+        final cid = characterId == null
+            ? t.characterId.isNull()
+            : t.characterId.equals(characterId);
+        return cid & t.worldId.equals(worldId) & t.kind.equals(kind);
+      });
+    return query.get();
+  }
+
+  Future<void> deleteMemoryVectors(
+    String? characterId,
+    String worldId,
+    String kind,
+  ) {
+    final query = delete(memoryVectors)
+      ..where((t) {
+        final cid = characterId == null
+            ? t.characterId.isNull()
+            : t.characterId.equals(characterId);
+        return cid & t.worldId.equals(worldId) & t.kind.equals(kind);
+      });
+    return query.go();
+  }
+
+  Future<void> deleteMemoryVectorsByIds(List<String> ids) {
+    if (ids.isEmpty) return Future.value();
+    return (delete(memoryVectors)..where((t) => t.id.isIn(ids))).go();
+  }
 
   // ---------------------------------------------------------------------
   // Settings

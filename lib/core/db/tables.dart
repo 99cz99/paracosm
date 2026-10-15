@@ -225,6 +225,9 @@ class ProviderConfigs extends Table {
   /// 记忆抽取/摘要用的模型名（可选，留空则用 [model]；用于「便宜模型」）。
   TextColumn get memoryModel => text().nullable()();
 
+  /// 向量召回用的 embedding 模型名（可选，留空则该 provider 不支持 embedding）。
+  TextColumn get embeddingModel => text().nullable()();
+
   /// 模型上下文窗口上限（token 数），用于实时 token 显示；null = 用默认 32000。
   IntColumn get contextWindowLimit => integer().nullable()();
   BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
@@ -361,6 +364,20 @@ class GroupMemories extends Table {
 
   @override
   Set<Column> get primaryKey => {groupId};
+}
+
+/// 向量召回用的文本 embedding 缓存（派生数据，可重新 embed，不进备份）。
+class MemoryVectors extends Table {
+  TextColumn get id => text()();
+  TextColumn get characterId => text().nullable()(); // 世界书条目可空（角色无关）
+  TextColumn get worldId => text().withDefault(const Constant(''))();
+  TextColumn get kind => text()(); // message / memory / worldbook
+  TextColumn get content => text()();
+  TextColumn get embeddingJson => text()(); // JSON 数组，double
+  IntColumn get createdAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 /// 剧情（视觉小说剧本）。

@@ -17,3 +17,9 @@ final tokenDisplayEnabledProvider = StreamProvider<bool>((ref) {
   final db = ref.watch(dbProvider);
   return db.watchSetting('token_display_enabled').map((v) => v == 'true');
 });
+
+/// Whether semantic vector recall is enabled (stored in Settings).
+final vectorRecallEnabledProvider = StreamProvider<bool>((ref) {
+  final db = ref.watch(dbProvider);
+  return db.watchSetting('vector_recall_enabled').map((v) => v == 'true');
+});

@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' hide Column;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
+import '../../../core/import/st_preset.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/providers/llm_providers.dart';
 import '../../../core/utils/dialogs.dart';
@@ -23,7 +28,16 @@ class PresetSettingsScreen extends ConsumerWidget {
     final configs = ref.watch(providerConfigsProvider).value ?? [];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('采样预设')),
+      appBar: AppBar(
+        title: const Text('采样预设'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.file_download_outlined),
+            tooltip: '导入酒馆预设',
+            onPressed: () => _import(context, ref),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openForm(context, ref, configs),
         child: const Icon(Icons.add),
@@ -48,7 +62,7 @@ class PresetSettingsScreen extends ConsumerWidget {
                   tooltip: '编辑',
                   onPressed: () => _openForm(context, ref, configs, existing: p),
                 ),
-                onLongPress: () => _delete(context, ref, p),
+                onLongPress: () => _showActions(context, ref, p),
               );
             },
           );
@@ -128,7 +142,140 @@ class PresetSettingsScreen extends ConsumerWidget {
     await ref.read(dbProvider).deletePreset(p.id);
     if (context.mounted) await showSuccessDialog(context, '已删除');
   }
+
+  Future<void> _showActions(BuildContext context, WidgetRef ref, Preset p) async {
+    final action = await showModalBottomSheet<_PresetAction>(
+      context: context,
+      useRootNavigator: false,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('编辑'),
+              onTap: () => Navigator.of(sheetContext).pop(_PresetAction.edit),
+            ),
+            ListTile(
+              leading: const Icon(Icons.ios_share),
+              title: const Text('导出'),
+              onTap: () => Navigator.of(sheetContext).pop(_PresetAction.export),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('删除'),
+              onTap: () => Navigator.of(sheetContext).pop(_PresetAction.delete),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case _PresetAction.edit:
+        final configs = ref.read(providerConfigsProvider).value ?? [];
+        await _openForm(context, ref, configs, existing: p);
+        break;
+      case _PresetAction.export:
+        await _export(context, p);
+        break;
+      case _PresetAction.delete:
+        await _delete(context, ref, p);
+        break;
+    }
+  }
+
+  Future<void> _import(BuildContext context, WidgetRef ref) async {
+    final mode = await showModalBottomSheet<_ImportMode>(
+      context: context,
+      useRootNavigator: false,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.folder_open),
+              title: const Text('文件导入'),
+              onTap: () => Navigator.of(sheetContext).pop(_ImportMode.file),
+            ),
+            ListTile(
+              leading: const Icon(Icons.content_paste),
+              title: const Text('粘贴 JSON'),
+              onTap: () => Navigator.of(sheetContext).pop(_ImportMode.paste),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mode == null || !context.mounted) return;
+
+    String? raw;
+    if (mode == _ImportMode.paste) {
+      raw = await showPasteTextDialog(context,
+          title: '粘贴酒馆预设 JSON', hint: '{...采样预设 JSON...}');
+      if (raw == null || raw.trim().isEmpty) return;
+    } else {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (files.isEmpty) return;
+      raw = utf8.decode(await files.first.readAsBytes());
+    }
+
+    final companion = parseStPresetJson(raw);
+    if (companion == null) {
+      if (context.mounted) {
+        await showErrorDialog(context, '不是有效的酒馆预设 JSON');
+      }
+      return;
+    }
+    final presets = await ref.read(presetsProvider.future);
+    if (presets.any((p) => p.name == companion.name.value)) {
+      if (context.mounted) {
+        await showErrorDialog(context, '已存在同名预设「${companion.name.value}」');
+      }
+      return;
+    }
+    await ref.read(dbProvider).insertPreset(companion);
+    if (context.mounted) await showSuccessDialog(context, '已导入预设');
+  }
+
+  Future<void> _export(BuildContext context, Preset p) async {
+    final json = exportPresetJson(p);
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('导出预设'),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Text(json, style: const TextStyle(fontSize: 12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: json));
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('复制 JSON'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+enum _ImportMode { file, paste }
+
+enum _PresetAction { edit, export, delete }
 
 class _PresetFormResult {
   const _PresetFormResult({

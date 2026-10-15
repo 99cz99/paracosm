@@ -47,6 +47,15 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => context.push('/profile/presets'),
           ),
           SwitchListTile(
+            secondary: const Icon(Icons.hub_outlined),
+            title: const Text('语义记忆召回'),
+            subtitle: const Text('向量检索相关历史内容注入上下文（需配置 embedding 模型）'),
+            value: ref.watch(vectorRecallEnabledProvider).value ?? false,
+            onChanged: (v) => ref
+                .read(dbProvider)
+                .setSetting('vector_recall_enabled', v.toString()),
+          ),
+          SwitchListTile(
             secondary: const Icon(Icons.speed),
             title: const Text('实时 Token 显示'),
             subtitle: const Text('聊天顶部显示当前输入占用的 token 数'),

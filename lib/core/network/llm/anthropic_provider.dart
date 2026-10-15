@@ -33,6 +33,13 @@ class AnthropicProvider implements LlmProvider {
   ProviderType get type => ProviderType.anthropic;
 
   @override
+  bool get supportsEmbeddings => false;
+
+  @override
+  Future<List<double>> embed(String text) async =>
+      throw UnsupportedError('Anthropic does not support embeddings');
+
+  @override
   Stream<ChatChunk> streamChat(ChatRequest request) async* {
     _cancelToken = CancelToken();
     final url = '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/v1/messages';

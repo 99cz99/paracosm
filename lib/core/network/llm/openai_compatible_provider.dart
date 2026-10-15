@@ -19,6 +19,7 @@ class OpenAiCompatibleProvider implements LlmProvider {
     required this.model,
     required this.apiKey,
     this.extraParams = const {},
+    this.embeddingModel,
     Dio? dio,
   }) : _dio = dio ?? Dio();
 
@@ -28,12 +29,19 @@ class OpenAiCompatibleProvider implements LlmProvider {
   final String model;
   final String apiKey;
   final Map<String, dynamic> extraParams;
+
+  /// Separate embedding model (e.g. `BAAI/bge-m3`); null = no embeddings.
+  final String? embeddingModel;
   final Dio _dio;
 
   CancelToken? _cancelToken;
 
   @override
   ProviderType get type => ProviderType.openaiCompatible;
+
+  @override
+  bool get supportsEmbeddings =>
+      embeddingModel != null && embeddingModel!.isNotEmpty;
 
   @override
   Stream<ChatChunk> streamChat(ChatRequest request) async* {
@@ -143,5 +151,38 @@ class OpenAiCompatibleProvider implements LlmProvider {
   Future<void> cancel() async {
     _cancelToken?.cancel();
     _cancelToken = null;
+  }
+
+  @override
+  Future<List<double>> embed(String text) async {
+    final em = embeddingModel;
+    if (em == null || em.isEmpty) {
+      throw UnsupportedError('No embedding model configured');
+    }
+    final url = '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/embeddings';
+    final Response<Map<String, dynamic>> response;
+    try {
+      response = await _dio.post<Map<String, dynamic>>(
+        url,
+        data: {'model': em, 'input': text},
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $apiKey',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+    } on DioException catch (e) {
+      throw mapDioException(e);
+    }
+    final data = response.data;
+    final list = data?['data'];
+    if (list is List && list.isNotEmpty && list.first is Map) {
+      final embedding = (list.first as Map)['embedding'];
+      if (embedding is List) {
+        return embedding.map((e) => (e as num).toDouble()).toList();
+      }
+    }
+    throw LlmException('无效的 embeddings 响应');
   }
 }

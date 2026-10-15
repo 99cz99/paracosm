@@ -22,6 +22,13 @@ class _FakeStoryProvider implements LlmProvider {
 
   @override
   Future<void> cancel() async {}
+
+  @override
+  bool get supportsEmbeddings => false;
+
+  @override
+  Future<List<double>> embed(String text) async =>
+      throw UnsupportedError('no embeddings');
 }
 
 Future<AppDatabase> _db() async {

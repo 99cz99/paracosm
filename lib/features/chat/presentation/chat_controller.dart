@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/background/reply_background.dart';
 import '../../../core/commands/slash_commands.dart';
 import '../../../core/db/database.dart';
+import '../../../core/memory/vector_store.dart';
 import '../../../core/network/llm/llm_provider.dart';
 import '../../../core/network/llm/provider_factory.dart';
 import '../../../core/network/llm/token_estimator.dart';
@@ -588,6 +589,7 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
         skipRelation:
             character != null && MemoryService.hasSkillGrowth(character),
       ),
+      ...await _vectorRecallSections(db, session, character, worldId, allMessages),
       ...await _worldSections(
         db,
         session,
@@ -787,6 +789,81 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     return sections;
   }
 
+  /// Semantic recall: injects the top-K most similar past messages (trimmed
+  /// from context) as a `【相关记忆】` section. No-op when the feature is
+  /// disabled or no embedding provider is configured.
+  Future<List<PromptSection>> _vectorRecallSections(
+    AppDatabase db,
+    Session session,
+    Character? character,
+    String worldId,
+    List<Message> allMessages,
+  ) async {
+    if (character == null) return const [];
+    if (await db.getSetting('vector_recall_enabled') != 'true') return const [];
+    final topK =
+        int.tryParse(await db.getSetting('vector_recall_top_k') ?? '') ?? 3;
+    final visible = allMessages
+        .where((m) =>
+            m.visibleToAi && (m.role == 'user' || m.role == 'assistant'))
+        .toList();
+    if (visible.isEmpty) return const [];
+
+    // Query with the most recent few messages, and exclude anything still in
+    // context (already sent) so recall only brings back trimmed-away content.
+    final query = visible
+        .skip(visible.length <= MemoryService.worldbookScanMessages
+            ? 0
+            : visible.length - MemoryService.worldbookScanMessages)
+        .map((m) => m.content)
+        .join('\n');
+    if (query.trim().isEmpty) return const [];
+    final inContext = visible.map((m) => m.id).toSet();
+
+    final store = VectorStore(db, ref.read(secureKeyStoreProvider));
+    final hits = await store.search(
+      query,
+      characterId: character.id,
+      worldId: worldId,
+      kind: 'message',
+      topK: topK + 3,
+    );
+    final texts = hits
+        .where((r) => !inContext.contains(r.id))
+        .take(topK)
+        .map((r) => r.content)
+        .toList();
+    if (texts.isEmpty) return const [];
+    return [
+      (label: '相关记忆', text: '【相关记忆】\n${texts.map((t) => '- $t').join('\n')}'),
+    ];
+  }
+
+  /// Embeds each visible message into the vector store after a turn. Incremental
+  /// (dedup by message id) and best-effort.
+  Future<void> _updateVectors(AppDatabase db, Session session) async {
+    try {
+      if (await db.getSetting('vector_recall_enabled') != 'true') return;
+      final worldId = session.worldId ?? '';
+      final store = VectorStore(db, ref.read(secureKeyStoreProvider));
+      final messages = (await db.getMessages(session.id))
+          .where((m) =>
+              m.visibleToAi && (m.role == 'user' || m.role == 'assistant'))
+          .toList();
+      for (final m in messages) {
+        await store.upsert(
+          id: m.id,
+          characterId: session.characterId,
+          worldId: worldId,
+          kind: 'message',
+          text: m.content,
+        );
+      }
+    } catch (_) {
+      // Vector recall is best-effort — never surface errors to the user.
+    }
+  }
+
   Future<void> _runMemoryUpdate(AppDatabase db, String sessionId) async {
     try {
       final session = await db.getSession(sessionId);
@@ -801,6 +878,7 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
         sessionId,
         MemoryService.buildProvider(config),
       );
+      await _updateVectors(db, session);
     } catch (_) {
       // Memory update is best-effort — never surface errors to the user.
     }

@@ -39,6 +39,7 @@ Future<LlmProviderConfig?> resolveProvider(
     apiKey: apiKey,
     extraParams: _decodeJson(row.extraParamsJson),
     memoryModel: row.memoryModel,
+    embeddingModel: row.embeddingModel,
     contextWindowLimit: row.contextWindowLimit,
   );
 }

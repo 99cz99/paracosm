@@ -113,4 +113,13 @@ abstract class LlmProvider {
 
   /// Cancels the in-flight request, if any.
   Future<void> cancel();
+
+  /// Whether this provider can embed text via [embed]. False unless a concrete
+  /// provider has a configured embedding model.
+  bool get supportsEmbeddings => false;
+
+  /// Embeds [text] into a dense vector. Only providers with [supportsEmbeddings]
+  /// implement this; the default throws.
+  Future<List<double>> embed(String text) async =>
+      throw UnsupportedError('This provider does not support embeddings');
 }
