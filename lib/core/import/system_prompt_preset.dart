@@ -70,21 +70,19 @@ List<SystemPromptPresetsCompanion> parseSystemPromptImport(
       }
     }
 
-    // 3. Settings export: `prompts` is a list of prompt blocks. Prefer the
-    // blocks flagged as system prompts (`system_prompt: true`); fall back to
-    // every non-empty block when no block carries the flag.
+    // 3. Settings export: `prompts` is a list of prompt blocks. These belong
+    // to ONE preset (SillyTavern's prompt manager), so concatenate all
+    // non-empty blocks into a single system prompt rather than splitting them.
     final prompts = decoded['prompts'];
     if (prompts is List) {
-      final blocks = prompts.whereType<Map>().toList();
-      var candidates = blocks.where((p) => p['system_prompt'] == true).toList();
-      if (candidates.isEmpty) candidates = blocks;
-      final out = <SystemPromptPresetsCompanion>[];
-      for (final p in candidates) {
-        final content = (p['content'] ?? '').toString().trim();
-        if (content.isEmpty) continue;
-        out.add(make((p['name'] ?? '').toString(), content));
+      final content = prompts
+          .whereType<Map>()
+          .map((p) => (p['content'] ?? '').toString().trim())
+          .where((s) => s.isNotEmpty)
+          .join('\n\n');
+      if (content.isNotEmpty) {
+        return [make((decoded['name'] ?? '').toString(), content)];
       }
-      if (out.isNotEmpty) return out;
     }
   }
 

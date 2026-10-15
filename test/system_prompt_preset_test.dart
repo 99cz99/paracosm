@@ -49,29 +49,21 @@ void main() {
     );
   });
 
-  test('parseSystemPromptImport imports all non-empty blocks when no flag', () {
-    final list = parseSystemPromptImport(jsonEncode({
-      'prompts': [
-        {'name': 'main', 'content': 'A'},
-        {'name': 'b', 'content': ''},
-        {'name': 'c', 'content': 'B'},
-      ],
-    }));
-    expect(list, hasLength(2));
-    expect(list[0].name.value, 'main');
-    expect(list[1].name.value, 'c');
-  });
-
-  test('parseSystemPromptImport prefers system_prompt=true blocks', () {
-    final list = parseSystemPromptImport(jsonEncode({
-      'prompts': [
-        {'name': 'sys1', 'content': 'S1', 'system_prompt': true},
-        {'name': 'other', 'content': 'O', 'system_prompt': false},
-        {'name': 'sys2', 'content': 'S2', 'system_prompt': true},
-      ],
-    }));
-    expect(list, hasLength(2));
-    expect(list.map((c) => c.name.value).toList(), ['sys1', 'sys2']);
+  test('parseSystemPromptImport concatenates a settings export into one preset', () {
+    final list = parseSystemPromptImport(
+      jsonEncode({
+        'prompts': [
+          {'name': 'main', 'content': 'A'},
+          {'name': 'b', 'content': ''},
+          {'name': 'c', 'content': 'B'},
+          {'name': 'sys', 'content': 'S', 'system_prompt': true},
+        ],
+      }),
+      fallbackName: '我的预设',
+    );
+    expect(list, hasLength(1));
+    expect(list.first.name.value, '我的预设');
+    expect(list.first.content.value, 'A\n\nB\n\nS');
   });
 
   test('parseSystemPromptImport treats plain text as content', () {
