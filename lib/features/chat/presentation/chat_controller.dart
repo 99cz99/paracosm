@@ -583,6 +583,8 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
           affinity,
           includeExample: !hasUserReply,
         ),
+      if (character != null)
+        ...await _systemPromptPresetSections(db, character),
       ..._memorySections(
         memory,
         relation,
@@ -956,6 +958,20 @@ class ChatController extends Notifier<ChatUiState> with WidgetsBindingObserver {
     }
 
     return sections;
+  }
+
+  /// The character's bound system-prompt presets, injected as raw sections
+  /// (no 【】 header, matching the raw system_prompt section).
+  Future<List<PromptSection>> _systemPromptPresetSections(
+    AppDatabase db,
+    Character character,
+  ) async {
+    final presets = await db.getSystemPromptPresetsForCharacter(character.id);
+    return [
+      for (final p in presets)
+        if (p.content.trim().isNotEmpty)
+          (label: '系统提示词预设', text: p.content.trim()),
+    ];
   }
 
   /// Resolves the skill growth state for a character in a world: the per-world

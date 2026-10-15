@@ -12372,6 +12372,702 @@ class CharacterWorldbooksCompanion extends UpdateCompanion<CharacterWorldbook> {
   }
 }
 
+class $SystemPromptPresetsTable extends SystemPromptPresets
+    with TableInfo<$SystemPromptPresetsTable, SystemPromptPreset> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SystemPromptPresetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    content,
+    description,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'system_prompt_presets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SystemPromptPreset> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SystemPromptPreset map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SystemPromptPreset(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SystemPromptPresetsTable createAlias(String alias) {
+    return $SystemPromptPresetsTable(attachedDatabase, alias);
+  }
+}
+
+class SystemPromptPreset extends DataClass
+    implements Insertable<SystemPromptPreset> {
+  final String id;
+  final String name;
+  final String content;
+  final String description;
+  final int createdAt;
+  final int updatedAt;
+  const SystemPromptPreset({
+    required this.id,
+    required this.name,
+    required this.content,
+    required this.description,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['content'] = Variable<String>(content);
+    map['description'] = Variable<String>(description);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SystemPromptPresetsCompanion toCompanion(bool nullToAbsent) {
+    return SystemPromptPresetsCompanion(
+      id: Value(id),
+      name: Value(name),
+      content: Value(content),
+      description: Value(description),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SystemPromptPreset.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SystemPromptPreset(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      content: serializer.fromJson<String>(json['content']),
+      description: serializer.fromJson<String>(json['description']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'content': serializer.toJson<String>(content),
+      'description': serializer.toJson<String>(description),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SystemPromptPreset copyWith({
+    String? id,
+    String? name,
+    String? content,
+    String? description,
+    int? createdAt,
+    int? updatedAt,
+  }) => SystemPromptPreset(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    content: content ?? this.content,
+    description: description ?? this.description,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SystemPromptPreset copyWithCompanion(SystemPromptPresetsCompanion data) {
+    return SystemPromptPreset(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      content: data.content.present ? data.content.value : this.content,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SystemPromptPreset(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('content: $content, ')
+          ..write('description: $description, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, content, description, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SystemPromptPreset &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.content == this.content &&
+          other.description == this.description &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SystemPromptPresetsCompanion extends UpdateCompanion<SystemPromptPreset> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> content;
+  final Value<String> description;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SystemPromptPresetsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.content = const Value.absent(),
+    this.description = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SystemPromptPresetsCompanion.insert({
+    required String id,
+    required String name,
+    required String content,
+    this.description = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       content = Value(content),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SystemPromptPreset> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? content,
+    Expression<String>? description,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (content != null) 'content': content,
+      if (description != null) 'description': description,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SystemPromptPresetsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? content,
+    Value<String>? description,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SystemPromptPresetsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      content: content ?? this.content,
+      description: description ?? this.description,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SystemPromptPresetsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('content: $content, ')
+          ..write('description: $description, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CharacterSystemPromptsTable extends CharacterSystemPrompts
+    with TableInfo<$CharacterSystemPromptsTable, CharacterSystemPrompt> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CharacterSystemPromptsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _characterIdMeta = const VerificationMeta(
+    'characterId',
+  );
+  @override
+  late final GeneratedColumn<String> characterId = GeneratedColumn<String>(
+    'character_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES characters (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _presetIdMeta = const VerificationMeta(
+    'presetId',
+  );
+  @override
+  late final GeneratedColumn<String> presetId = GeneratedColumn<String>(
+    'preset_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES system_prompt_presets (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [characterId, presetId, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'character_system_prompts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CharacterSystemPrompt> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('character_id')) {
+      context.handle(
+        _characterIdMeta,
+        characterId.isAcceptableOrUnknown(
+          data['character_id']!,
+          _characterIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_characterIdMeta);
+    }
+    if (data.containsKey('preset_id')) {
+      context.handle(
+        _presetIdMeta,
+        presetId.isAcceptableOrUnknown(data['preset_id']!, _presetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_presetIdMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {characterId, presetId};
+  @override
+  CharacterSystemPrompt map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CharacterSystemPrompt(
+      characterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}character_id'],
+      )!,
+      presetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preset_id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CharacterSystemPromptsTable createAlias(String alias) {
+    return $CharacterSystemPromptsTable(attachedDatabase, alias);
+  }
+}
+
+class CharacterSystemPrompt extends DataClass
+    implements Insertable<CharacterSystemPrompt> {
+  final String characterId;
+  final String presetId;
+  final int createdAt;
+  const CharacterSystemPrompt({
+    required this.characterId,
+    required this.presetId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['character_id'] = Variable<String>(characterId);
+    map['preset_id'] = Variable<String>(presetId);
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  CharacterSystemPromptsCompanion toCompanion(bool nullToAbsent) {
+    return CharacterSystemPromptsCompanion(
+      characterId: Value(characterId),
+      presetId: Value(presetId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory CharacterSystemPrompt.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CharacterSystemPrompt(
+      characterId: serializer.fromJson<String>(json['characterId']),
+      presetId: serializer.fromJson<String>(json['presetId']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'characterId': serializer.toJson<String>(characterId),
+      'presetId': serializer.toJson<String>(presetId),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  CharacterSystemPrompt copyWith({
+    String? characterId,
+    String? presetId,
+    int? createdAt,
+  }) => CharacterSystemPrompt(
+    characterId: characterId ?? this.characterId,
+    presetId: presetId ?? this.presetId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  CharacterSystemPrompt copyWithCompanion(
+    CharacterSystemPromptsCompanion data,
+  ) {
+    return CharacterSystemPrompt(
+      characterId: data.characterId.present
+          ? data.characterId.value
+          : this.characterId,
+      presetId: data.presetId.present ? data.presetId.value : this.presetId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterSystemPrompt(')
+          ..write('characterId: $characterId, ')
+          ..write('presetId: $presetId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(characterId, presetId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CharacterSystemPrompt &&
+          other.characterId == this.characterId &&
+          other.presetId == this.presetId &&
+          other.createdAt == this.createdAt);
+}
+
+class CharacterSystemPromptsCompanion
+    extends UpdateCompanion<CharacterSystemPrompt> {
+  final Value<String> characterId;
+  final Value<String> presetId;
+  final Value<int> createdAt;
+  final Value<int> rowid;
+  const CharacterSystemPromptsCompanion({
+    this.characterId = const Value.absent(),
+    this.presetId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CharacterSystemPromptsCompanion.insert({
+    required String characterId,
+    required String presetId,
+    required int createdAt,
+    this.rowid = const Value.absent(),
+  }) : characterId = Value(characterId),
+       presetId = Value(presetId),
+       createdAt = Value(createdAt);
+  static Insertable<CharacterSystemPrompt> custom({
+    Expression<String>? characterId,
+    Expression<String>? presetId,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (characterId != null) 'character_id': characterId,
+      if (presetId != null) 'preset_id': presetId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CharacterSystemPromptsCompanion copyWith({
+    Value<String>? characterId,
+    Value<String>? presetId,
+    Value<int>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return CharacterSystemPromptsCompanion(
+      characterId: characterId ?? this.characterId,
+      presetId: presetId ?? this.presetId,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (characterId.present) {
+      map['character_id'] = Variable<String>(characterId.value);
+    }
+    if (presetId.present) {
+      map['preset_id'] = Variable<String>(presetId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterSystemPromptsCompanion(')
+          ..write('characterId: $characterId, ')
+          ..write('presetId: $presetId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $WorldWorldbooksTable extends WorldWorldbooks
     with TableInfo<$WorldWorldbooksTable, WorldWorldbook> {
   @override
@@ -13789,6 +14485,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $WorldbooksTable worldbooks = $WorldbooksTable(this);
   late final $CharacterWorldbooksTable characterWorldbooks =
       $CharacterWorldbooksTable(this);
+  late final $SystemPromptPresetsTable systemPromptPresets =
+      $SystemPromptPresetsTable(this);
+  late final $CharacterSystemPromptsTable characterSystemPrompts =
+      $CharacterSystemPromptsTable(this);
   late final $WorldWorldbooksTable worldWorldbooks = $WorldWorldbooksTable(
     this,
   );
@@ -13828,6 +14528,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storySaves,
     worldbooks,
     characterWorldbooks,
+    systemPromptPresets,
+    characterSystemPrompts,
     worldWorldbooks,
     groupWorldbooks,
     storyWorldbooks,
@@ -13947,6 +14649,24 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('character_worldbooks', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'characters',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate('character_system_prompts', kind: UpdateKind.delete),
+      ],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'system_prompt_presets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate('character_system_prompts', kind: UpdateKind.delete),
+      ],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -14210,6 +14930,31 @@ final class $$CharactersTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<
+    $CharacterSystemPromptsTable,
+    List<CharacterSystemPrompt>
+  >
+  _characterSystemPromptsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.characterSystemPrompts,
+        aliasName: 'characters__id__character_system_prompts__character_id',
+      );
+
+  $$CharacterSystemPromptsTableProcessedTableManager
+  get characterSystemPromptsRefs {
+    final manager = $$CharacterSystemPromptsTableTableManager(
+      $_db,
+      $_db.characterSystemPrompts,
+    ).filter((f) => f.characterId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _characterSystemPromptsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$CharactersTableFilterComposer
@@ -14468,6 +15213,32 @@ class $$CharactersTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> characterSystemPromptsRefs(
+    Expression<bool> Function($$CharacterSystemPromptsTableFilterComposer f) f,
+  ) {
+    final $$CharacterSystemPromptsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.characterSystemPrompts,
+          getReferencedColumn: (t) => t.characterId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CharacterSystemPromptsTableFilterComposer(
+                $db: $db,
+                $table: $db.characterSystemPrompts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -14806,6 +15577,32 @@ class $$CharactersTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> characterSystemPromptsRefs<T extends Object>(
+    Expression<T> Function($$CharacterSystemPromptsTableAnnotationComposer a) f,
+  ) {
+    final $$CharacterSystemPromptsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.characterSystemPrompts,
+          getReferencedColumn: (t) => t.characterId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CharacterSystemPromptsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.characterSystemPrompts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$CharactersTableTableManager
@@ -14829,6 +15626,7 @@ class $$CharactersTableTableManager
             bool characterMemoriesRefs,
             bool groupMembersRefs,
             bool characterWorldbooksRefs,
+            bool characterSystemPromptsRefs,
           })
         > {
   $$CharactersTableTableManager(_$AppDatabase db, $CharactersTable table)
@@ -14931,6 +15729,7 @@ class $$CharactersTableTableManager
                 characterMemoriesRefs = false,
                 groupMembersRefs = false,
                 characterWorldbooksRefs = false,
+                characterSystemPromptsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -14942,6 +15741,7 @@ class $$CharactersTableTableManager
                     if (characterMemoriesRefs) db.characterMemories,
                     if (groupMembersRefs) db.groupMembers,
                     if (characterWorldbooksRefs) db.characterWorldbooks,
+                    if (characterSystemPromptsRefs) db.characterSystemPrompts,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -15093,6 +15893,27 @@ class $$CharactersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (characterSystemPromptsRefs)
+                        await $_getPrefetchedData<
+                          Character,
+                          $CharactersTable,
+                          CharacterSystemPrompt
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CharactersTableReferences
+                              ._characterSystemPromptsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CharactersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).characterSystemPromptsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.characterId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -15121,6 +15942,7 @@ typedef $$CharactersTableProcessedTableManager =
         bool characterMemoriesRefs,
         bool groupMembersRefs,
         bool characterWorldbooksRefs,
+        bool characterSystemPromptsRefs,
       })
     >;
 typedef $$CharacterAdaptationsTableCreateCompanionBuilder =
@@ -24574,6 +25396,749 @@ typedef $$CharacterWorldbooksTableProcessedTableManager =
       CharacterWorldbook,
       PrefetchHooks Function({bool characterId, bool worldbookId})
     >;
+typedef $$SystemPromptPresetsTableCreateCompanionBuilder =
+    SystemPromptPresetsCompanion Function({
+      required String id,
+      required String name,
+      required String content,
+      Value<String> description,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SystemPromptPresetsTableUpdateCompanionBuilder =
+    SystemPromptPresetsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> content,
+      Value<String> description,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$SystemPromptPresetsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $SystemPromptPresetsTable,
+          SystemPromptPreset
+        > {
+  $$SystemPromptPresetsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $CharacterSystemPromptsTable,
+    List<CharacterSystemPrompt>
+  >
+  _characterSystemPromptsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.characterSystemPrompts,
+        aliasName:
+            'system_prompt_presets__id__character_system_prompts__preset_id',
+      );
+
+  $$CharacterSystemPromptsTableProcessedTableManager
+  get characterSystemPromptsRefs {
+    final manager = $$CharacterSystemPromptsTableTableManager(
+      $_db,
+      $_db.characterSystemPrompts,
+    ).filter((f) => f.presetId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _characterSystemPromptsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$SystemPromptPresetsTableFilterComposer
+    extends Composer<_$AppDatabase, $SystemPromptPresetsTable> {
+  $$SystemPromptPresetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> characterSystemPromptsRefs(
+    Expression<bool> Function($$CharacterSystemPromptsTableFilterComposer f) f,
+  ) {
+    final $$CharacterSystemPromptsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.characterSystemPrompts,
+          getReferencedColumn: (t) => t.presetId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CharacterSystemPromptsTableFilterComposer(
+                $db: $db,
+                $table: $db.characterSystemPrompts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$SystemPromptPresetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SystemPromptPresetsTable> {
+  $$SystemPromptPresetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SystemPromptPresetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SystemPromptPresetsTable> {
+  $$SystemPromptPresetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> characterSystemPromptsRefs<T extends Object>(
+    Expression<T> Function($$CharacterSystemPromptsTableAnnotationComposer a) f,
+  ) {
+    final $$CharacterSystemPromptsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.characterSystemPrompts,
+          getReferencedColumn: (t) => t.presetId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CharacterSystemPromptsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.characterSystemPrompts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$SystemPromptPresetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SystemPromptPresetsTable,
+          SystemPromptPreset,
+          $$SystemPromptPresetsTableFilterComposer,
+          $$SystemPromptPresetsTableOrderingComposer,
+          $$SystemPromptPresetsTableAnnotationComposer,
+          $$SystemPromptPresetsTableCreateCompanionBuilder,
+          $$SystemPromptPresetsTableUpdateCompanionBuilder,
+          (SystemPromptPreset, $$SystemPromptPresetsTableReferences),
+          SystemPromptPreset,
+          PrefetchHooks Function({bool characterSystemPromptsRefs})
+        > {
+  $$SystemPromptPresetsTableTableManager(
+    _$AppDatabase db,
+    $SystemPromptPresetsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SystemPromptPresetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SystemPromptPresetsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$SystemPromptPresetsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<String> description = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SystemPromptPresetsCompanion(
+                id: id,
+                name: name,
+                content: content,
+                description: description,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String content,
+                Value<String> description = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SystemPromptPresetsCompanion.insert(
+                id: id,
+                name: name,
+                content: content,
+                description: description,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SystemPromptPresetsTable, SystemPromptPreset>(
+                    table,
+                  ),
+                  $$SystemPromptPresetsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({characterSystemPromptsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (characterSystemPromptsRefs) db.characterSystemPrompts,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (characterSystemPromptsRefs)
+                    await $_getPrefetchedData<
+                      SystemPromptPreset,
+                      $SystemPromptPresetsTable,
+                      CharacterSystemPrompt
+                    >(
+                      currentTable: table,
+                      referencedTable: $$SystemPromptPresetsTableReferences
+                          ._characterSystemPromptsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$SystemPromptPresetsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).characterSystemPromptsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.presetId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SystemPromptPresetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SystemPromptPresetsTable,
+      SystemPromptPreset,
+      $$SystemPromptPresetsTableFilterComposer,
+      $$SystemPromptPresetsTableOrderingComposer,
+      $$SystemPromptPresetsTableAnnotationComposer,
+      $$SystemPromptPresetsTableCreateCompanionBuilder,
+      $$SystemPromptPresetsTableUpdateCompanionBuilder,
+      (SystemPromptPreset, $$SystemPromptPresetsTableReferences),
+      SystemPromptPreset,
+      PrefetchHooks Function({bool characterSystemPromptsRefs})
+    >;
+typedef $$CharacterSystemPromptsTableCreateCompanionBuilder =
+    CharacterSystemPromptsCompanion Function({
+      required String characterId,
+      required String presetId,
+      required int createdAt,
+      Value<int> rowid,
+    });
+typedef $$CharacterSystemPromptsTableUpdateCompanionBuilder =
+    CharacterSystemPromptsCompanion Function({
+      Value<String> characterId,
+      Value<String> presetId,
+      Value<int> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$CharacterSystemPromptsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $CharacterSystemPromptsTable,
+          CharacterSystemPrompt
+        > {
+  $$CharacterSystemPromptsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $CharactersTable _characterIdTable(_$AppDatabase db) => db.characters
+      .createAlias('character_system_prompts__character_id__characters__id');
+
+  $$CharactersTableProcessedTableManager get characterId {
+    final $_column = $_itemColumn<String>('character_id')!;
+
+    final manager = $$CharactersTableTableManager(
+      $_db,
+      $_db.characters,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_characterIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $SystemPromptPresetsTable _presetIdTable(_$AppDatabase db) =>
+      db.systemPromptPresets.createAlias(
+        'character_system_prompts__preset_id__system_prompt_presets__id',
+      );
+
+  $$SystemPromptPresetsTableProcessedTableManager get presetId {
+    final $_column = $_itemColumn<String>('preset_id')!;
+
+    final manager = $$SystemPromptPresetsTableTableManager(
+      $_db,
+      $_db.systemPromptPresets,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_presetIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CharacterSystemPromptsTableFilterComposer
+    extends Composer<_$AppDatabase, $CharacterSystemPromptsTable> {
+  $$CharacterSystemPromptsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$CharactersTableFilterComposer get characterId {
+    final $$CharactersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.characterId,
+      referencedTable: $db.characters,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CharactersTableFilterComposer(
+            $db: $db,
+            $table: $db.characters,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$SystemPromptPresetsTableFilterComposer get presetId {
+    final $$SystemPromptPresetsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.presetId,
+      referencedTable: $db.systemPromptPresets,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SystemPromptPresetsTableFilterComposer(
+            $db: $db,
+            $table: $db.systemPromptPresets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CharacterSystemPromptsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CharacterSystemPromptsTable> {
+  $$CharacterSystemPromptsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$CharactersTableOrderingComposer get characterId {
+    final $$CharactersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.characterId,
+      referencedTable: $db.characters,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CharactersTableOrderingComposer(
+            $db: $db,
+            $table: $db.characters,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$SystemPromptPresetsTableOrderingComposer get presetId {
+    final $$SystemPromptPresetsTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.presetId,
+          referencedTable: $db.systemPromptPresets,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$SystemPromptPresetsTableOrderingComposer(
+                $db: $db,
+                $table: $db.systemPromptPresets,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$CharacterSystemPromptsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CharacterSystemPromptsTable> {
+  $$CharacterSystemPromptsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$CharactersTableAnnotationComposer get characterId {
+    final $$CharactersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.characterId,
+      referencedTable: $db.characters,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CharactersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.characters,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$SystemPromptPresetsTableAnnotationComposer get presetId {
+    final $$SystemPromptPresetsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.presetId,
+          referencedTable: $db.systemPromptPresets,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$SystemPromptPresetsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.systemPromptPresets,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$CharacterSystemPromptsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CharacterSystemPromptsTable,
+          CharacterSystemPrompt,
+          $$CharacterSystemPromptsTableFilterComposer,
+          $$CharacterSystemPromptsTableOrderingComposer,
+          $$CharacterSystemPromptsTableAnnotationComposer,
+          $$CharacterSystemPromptsTableCreateCompanionBuilder,
+          $$CharacterSystemPromptsTableUpdateCompanionBuilder,
+          (CharacterSystemPrompt, $$CharacterSystemPromptsTableReferences),
+          CharacterSystemPrompt,
+          PrefetchHooks Function({bool characterId, bool presetId})
+        > {
+  $$CharacterSystemPromptsTableTableManager(
+    _$AppDatabase db,
+    $CharacterSystemPromptsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CharacterSystemPromptsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$CharacterSystemPromptsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CharacterSystemPromptsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> characterId = const Value.absent(),
+                Value<String> presetId = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterSystemPromptsCompanion(
+                characterId: characterId,
+                presetId: presetId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String characterId,
+                required String presetId,
+                required int createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterSystemPromptsCompanion.insert(
+                characterId: characterId,
+                presetId: presetId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $CharacterSystemPromptsTable,
+                    CharacterSystemPrompt
+                  >(table),
+                  $$CharacterSystemPromptsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({characterId = false, presetId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (characterId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.characterId,
+                        referencedTable: $$CharacterSystemPromptsTableReferences
+                            ._characterIdTable(db),
+                        referencedColumn:
+                            $$CharacterSystemPromptsTableReferences
+                                ._characterIdTable(db)
+                                .id,
+                      ) as T;
+                    }
+                    if (presetId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.presetId,
+                        referencedTable: $$CharacterSystemPromptsTableReferences
+                            ._presetIdTable(db),
+                        referencedColumn:
+                            $$CharacterSystemPromptsTableReferences
+                                ._presetIdTable(db)
+                                .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CharacterSystemPromptsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CharacterSystemPromptsTable,
+      CharacterSystemPrompt,
+      $$CharacterSystemPromptsTableFilterComposer,
+      $$CharacterSystemPromptsTableOrderingComposer,
+      $$CharacterSystemPromptsTableAnnotationComposer,
+      $$CharacterSystemPromptsTableCreateCompanionBuilder,
+      $$CharacterSystemPromptsTableUpdateCompanionBuilder,
+      (CharacterSystemPrompt, $$CharacterSystemPromptsTableReferences),
+      CharacterSystemPrompt,
+      PrefetchHooks Function({bool characterId, bool presetId})
+    >;
 typedef $$WorldWorldbooksTableCreateCompanionBuilder =
     WorldWorldbooksCompanion Function({
       required String worldId,
@@ -26450,6 +28015,13 @@ class $AppDatabaseManager {
       $$WorldbooksTableTableManager(_db, _db.worldbooks);
   $$CharacterWorldbooksTableTableManager get characterWorldbooks =>
       $$CharacterWorldbooksTableTableManager(_db, _db.characterWorldbooks);
+  $$SystemPromptPresetsTableTableManager get systemPromptPresets =>
+      $$SystemPromptPresetsTableTableManager(_db, _db.systemPromptPresets);
+  $$CharacterSystemPromptsTableTableManager get characterSystemPrompts =>
+      $$CharacterSystemPromptsTableTableManager(
+        _db,
+        _db.characterSystemPrompts,
+      );
   $$WorldWorldbooksTableTableManager get worldWorldbooks =>
       $$WorldWorldbooksTableTableManager(_db, _db.worldWorldbooks);
   $$GroupWorldbooksTableTableManager get groupWorldbooks =>

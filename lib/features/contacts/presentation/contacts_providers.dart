@@ -24,3 +24,8 @@ final characterWorldbooksProvider =
     StreamProvider.family<List<Worldbook>, String>((ref, characterId) {
   return ref.watch(dbProvider).watchWorldbooksForCharacter(characterId);
 });
+
+final characterSystemPromptsProvider =
+    StreamProvider.family<List<SystemPromptPreset>, String>((ref, characterId) {
+  return ref.watch(dbProvider).watchSystemPromptPresetsForCharacter(characterId);
+});

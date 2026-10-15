@@ -15,6 +15,7 @@ import '../../features/group_chat/presentation/group_info_screen.dart';
 import '../../features/home/presentation/home_shell.dart';
 import '../../features/profile/presentation/preset_settings_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
+import '../../features/profile/presentation/system_prompt_preset_screen.dart';
 import '../../features/profile/presentation/provider_settings_screen.dart';
 import '../../features/search/presentation/search_screen.dart';
 import '../../features/spec/presentation/doc_screen.dart';
@@ -185,6 +186,10 @@ final appRouter = GoRouter(
               GoRoute(
                 path: 'presets',
                 builder: (context, state) => const PresetSettingsScreen(),
+              ),
+              GoRoute(
+                path: 'sysprompts',
+                builder: (context, state) => const SystemPromptPresetScreen(),
               ),
               GoRoute(
                 path: 'assistants',

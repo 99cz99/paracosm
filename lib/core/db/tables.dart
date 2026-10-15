@@ -461,6 +461,31 @@ class CharacterWorldbooks extends Table {
   Set<Column> get primaryKey => {characterId, worldbookId};
 }
 
+/// 系统提示词/破限提示词预设库（独立库，可绑定到角色）。
+class SystemPromptPresets extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get content => text()();
+  TextColumn get description => text().withDefault(const Constant(''))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// 角色 ↔ 系统提示词预设（多对多）。
+class CharacterSystemPrompts extends Table {
+  TextColumn get characterId =>
+      text().references(Characters, #id, onDelete: KeyAction.cascade)();
+  TextColumn get presetId =>
+      text().references(SystemPromptPresets, #id, onDelete: KeyAction.cascade)();
+  IntColumn get createdAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {characterId, presetId};
+}
+
 /// 世界 ↔ 世界书（绑定到世界后，进入该世界自动生效）。
 class WorldWorldbooks extends Table {
   TextColumn get worldId =>

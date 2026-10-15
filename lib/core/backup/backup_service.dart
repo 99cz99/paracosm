@@ -40,6 +40,8 @@ class BackupService {
     final presets = await _db.select(_db.presets).get();
     final settings = await _db.select(_db.settings).get();
     final groupMemories = await _db.select(_db.groupMemories).get();
+    final systemPromptPresets = await _db.select(_db.systemPromptPresets).get();
+    final characterSystemPrompts = await _db.select(_db.characterSystemPrompts).get();
 
     return jsonEncode({
       'version': 1,
@@ -70,6 +72,8 @@ class BackupService {
       'presets': presets.map(_preset).toList(),
       'settings': settings.map(_setting).toList(),
       'groupMemories': groupMemories.map(_gmem).toList(),
+      'systemPromptPresets': systemPromptPresets.map(_sp).toList(),
+      'characterSystemPrompts': characterSystemPrompts.map(_csp).toList(),
     });
   }
 
@@ -86,6 +90,8 @@ class BackupService {
       await _db.delete(_db.worldWorldbooks).go();
       await _db.delete(_db.characterWorldbooks).go();
       await _db.delete(_db.worldbooks).go();
+      await _db.delete(_db.characterSystemPrompts).go();
+      await _db.delete(_db.systemPromptPresets).go();
       await _db.delete(_db.pairRelations).go();
       await _db.delete(_db.groupMessages).go();
       await _db.delete(_db.groupMembers).go();
@@ -141,6 +147,13 @@ class BackupService {
         id: e['id'], name: e['name'], description: Value(e['description']),
         bookJson: Value(e['bookJson']), sourceType: Value(e['sourceType']),
         sourcePath: Value(e['sourcePath'] as String?),
+        createdAt: e['createdAt'], updatedAt: e['updatedAt'],
+      ));
+    }
+    for (final e in _list(data, 'systemPromptPresets')) {
+      await _db.into(_db.systemPromptPresets).insert(SystemPromptPresetsCompanion.insert(
+        id: e['id'], name: e['name'], content: e['content'],
+        description: Value(e['description']),
         createdAt: e['createdAt'], updatedAt: e['updatedAt'],
       ));
     }
@@ -284,6 +297,11 @@ class BackupService {
         characterId: e['characterId'], worldbookId: e['worldbookId'], createdAt: e['createdAt'],
       ));
     }
+    for (final e in _list(data, 'characterSystemPrompts')) {
+      await _db.into(_db.characterSystemPrompts).insert(CharacterSystemPromptsCompanion.insert(
+        characterId: e['characterId'], presetId: e['presetId'], createdAt: e['createdAt'],
+      ));
+    }
     for (final e in _list(data, 'worldWorldbooks')) {
       await _db.into(_db.worldWorldbooks).insert(WorldWorldbooksCompanion.insert(
         worldId: e['worldId'], worldbookId: e['worldbookId'], createdAt: e['createdAt'],
@@ -410,6 +428,14 @@ class BackupService {
       };
   Map<String, dynamic> _cwb(CharacterWorldbook r) => {
         'characterId': r.characterId, 'worldbookId': r.worldbookId, 'createdAt': r.createdAt,
+      };
+  Map<String, dynamic> _sp(SystemPromptPreset p) => {
+        'id': p.id, 'name': p.name, 'content': p.content,
+        'description': p.description,
+        'createdAt': p.createdAt, 'updatedAt': p.updatedAt,
+      };
+  Map<String, dynamic> _csp(CharacterSystemPrompt r) => {
+        'characterId': r.characterId, 'presetId': r.presetId, 'createdAt': r.createdAt,
       };
   Map<String, dynamic> _wwb(WorldWorldbook r) => {
         'worldId': r.worldId, 'worldbookId': r.worldbookId, 'createdAt': r.createdAt,

@@ -32,6 +32,8 @@ part 'database.g.dart';
     StorySaves,
     Worldbooks,
     CharacterWorldbooks,
+    SystemPromptPresets,
+    CharacterSystemPrompts,
     WorldWorldbooks,
     GroupWorldbooks,
     StoryWorldbooks,
@@ -223,6 +225,11 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
             // Embedding model per provider + vector-recall cache table.
             await m.addColumn(providerConfigs, providerConfigs.embeddingModel);
             await m.createTable(memoryVectors);
+          }
+          if (from < 23) {
+            // System-prompt preset library + character binding.
+            await m.createTable(systemPromptPresets);
+            await m.createTable(characterSystemPrompts);
           }
         },
         beforeOpen: (details) async {
@@ -681,6 +688,105 @@ worldbook_json IS NOT NULL AND worldbook_json != ''
           CharacterWorldbooksCompanion.insert(
             characterId: characterId,
             worldbookId: wid,
+            createdAt: createdAt,
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
+  }
+
+  // --- System prompt presets ----------------------------------------------
+  Stream<List<SystemPromptPreset>> watchSystemPromptPresets() =>
+      (select(systemPromptPresets)
+            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+          .watch();
+
+  Future<SystemPromptPreset?> getSystemPromptPreset(String id) =>
+      (select(systemPromptPresets)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
+  Future<void> insertSystemPromptPreset(SystemPromptPresetsCompanion entry) =>
+      into(systemPromptPresets).insert(entry);
+
+  Future<void> updateSystemPromptPreset(
+          String id, SystemPromptPresetsCompanion entry) =>
+      (update(systemPromptPresets)..where((t) => t.id.equals(id))).write(entry);
+
+  Future<void> deleteSystemPromptPreset(String id) =>
+      (delete(systemPromptPresets)..where((t) => t.id.equals(id))).go();
+
+  Future<List<SystemPromptPreset>> getSystemPromptPresetsByIds(Set<String> ids) =>
+      ids.isEmpty
+          ? Future.value(const [])
+          : (select(systemPromptPresets)..where((t) => t.id.isIn(ids))).get();
+
+  Future<List<SystemPromptPreset>> getSystemPromptPresetsForCharacter(
+      String characterId) async {
+    final query = select(characterSystemPrompts).join([
+      innerJoin(systemPromptPresets,
+          systemPromptPresets.id.equalsExp(characterSystemPrompts.presetId)),
+    ]);
+    query.where(characterSystemPrompts.characterId.equals(characterId));
+    final rows = await query.get();
+    return rows.map((row) => row.readTable(systemPromptPresets)).toList();
+  }
+
+  Stream<List<SystemPromptPreset>> watchSystemPromptPresetsForCharacter(
+      String characterId) {
+    final query = select(characterSystemPrompts).join([
+      innerJoin(systemPromptPresets,
+          systemPromptPresets.id.equalsExp(characterSystemPrompts.presetId)),
+    ]);
+    query.where(characterSystemPrompts.characterId.equals(characterId));
+    return query.watch().map((rows) =>
+        rows.map((row) => row.readTable(systemPromptPresets)).toList());
+  }
+
+  Future<List<String>> getCharacterSystemPromptIds(String characterId) async {
+    final rows = await (select(characterSystemPrompts)
+          ..where((t) => t.characterId.equals(characterId)))
+        .get();
+    return rows.map((r) => r.presetId).toList();
+  }
+
+  Future<void> bindCharacterSystemPrompt(
+    String characterId,
+    String presetId,
+    int createdAt,
+  ) =>
+      into(characterSystemPrompts).insert(
+        CharacterSystemPromptsCompanion.insert(
+          characterId: characterId,
+          presetId: presetId,
+          createdAt: createdAt,
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+
+  Future<void> unbindCharacterSystemPrompt(
+    String characterId,
+    String presetId,
+  ) =>
+      (delete(characterSystemPrompts)
+            ..where((t) =>
+                t.characterId.equals(characterId) & t.presetId.equals(presetId)))
+          .go();
+
+  Future<void> setCharacterSystemPrompts(
+    String characterId,
+    Set<String> presetIds,
+    int createdAt,
+  ) async {
+    await transaction(() async {
+      await (delete(characterSystemPrompts)
+            ..where((t) => t.characterId.equals(characterId)))
+          .go();
+      for (final pid in presetIds) {
+        await into(characterSystemPrompts).insert(
+          CharacterSystemPromptsCompanion.insert(
+            characterId: characterId,
+            presetId: pid,
             createdAt: createdAt,
           ),
           mode: InsertMode.insertOrIgnore,

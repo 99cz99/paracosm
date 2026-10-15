@@ -217,6 +217,28 @@ class CharacterDetailScreen extends ConsumerWidget {
             ],
           ),
         ),
+        Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 0,
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          clipBehavior: Clip.antiAlias,
+          child: ExpansionTile(
+            leading:
+                Icon(Icons.article_outlined, color: Theme.of(context).colorScheme.primary),
+            title: Text('系统提示词预设', style: Theme.of(context).textTheme.titleMedium),
+            subtitle: const Text(
+              '绑定的提示词会注入该角色的 system prompt。',
+              style: TextStyle(fontSize: 12),
+            ),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: _buildSystemPrompts(context, ref),
+              ),
+            ],
+          ),
+        ),
         if (persona.isNotEmpty)
           _sectionCard(
             context,
@@ -524,6 +546,87 @@ class CharacterDetailScreen extends ConsumerWidget {
     );
     if (!ok) return;
     await ref.read(dbProvider).unbindCharacterWorldbook(characterId, b.id);
+    if (context.mounted) await showSuccessDialog(context, '已解绑');
+  }
+
+  Widget _buildSystemPrompts(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(characterSystemPromptsProvider(characterId));
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(8),
+        child: CircularProgressIndicator(),
+      ),
+      error: (e, _) => Text('加载失败：$e'),
+      data: (presets) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (presets.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text('未绑定系统提示词预设'),
+            ),
+          for (final p in presets)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: const Icon(Icons.link_off),
+                tooltip: '解绑',
+                onPressed: () => _unbindSystemPrompt(context, ref, p),
+              ),
+            ),
+          TextButton.icon(
+            onPressed: () => _bindSystemPrompt(context, ref),
+            icon: const Icon(Icons.add),
+            label: const Text('绑定预设'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _bindSystemPrompt(BuildContext context, WidgetRef ref) async {
+    final presets = await ref.read(dbProvider).watchSystemPromptPresets().first;
+    if (!context.mounted) return;
+    if (presets.isEmpty) {
+      await showErrorDialog(context, '请先在「我 → 系统提示词预设」添加预设');
+      return;
+    }
+    final bound =
+        (ref.read(characterSystemPromptsProvider(characterId)).value ?? [])
+            .map((p) => p.id)
+            .toSet();
+    final available = presets.where((p) => !bound.contains(p.id)).toList();
+    if (available.isEmpty) {
+      await showErrorDialog(context, '该角色已绑定全部预设');
+      return;
+    }
+    final selected = await showMultiSelectSheet(
+      context,
+      title: '绑定系统提示词预设',
+      options: [for (final p in available) MultiSelectOption(p.id, p.name)],
+    );
+    if (selected == null || selected.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final id in selected) {
+      await ref.read(dbProvider).bindCharacterSystemPrompt(characterId, id, now);
+    }
+    if (context.mounted) await showSuccessDialog(context, '已绑定预设');
+  }
+
+  Future<void> _unbindSystemPrompt(
+    BuildContext context,
+    WidgetRef ref,
+    SystemPromptPreset p,
+  ) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: '解绑预设',
+      message: '确定解绑「${p.name}」吗？',
+      confirmLabel: '解绑',
+    );
+    if (!ok) return;
+    await ref.read(dbProvider).unbindCharacterSystemPrompt(characterId, p.id);
     if (context.mounted) await showSuccessDialog(context, '已解绑');
   }
 

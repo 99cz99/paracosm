@@ -46,6 +46,13 @@ class ProfileScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/profile/presets'),
           ),
+          ListTile(
+            leading: const Icon(Icons.article_outlined),
+            title: const Text('系统提示词预设'),
+            subtitle: const Text('可绑到角色、聊天时注入 system prompt 的提示词库'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/profile/sysprompts'),
+          ),
           SwitchListTile(
             secondary: const Icon(Icons.hub_outlined),
             title: const Text('语义记忆召回'),
