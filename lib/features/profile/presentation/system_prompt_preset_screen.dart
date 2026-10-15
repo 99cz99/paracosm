@@ -202,22 +202,36 @@ class SystemPromptPresetScreen extends ConsumerWidget {
       fallbackName = dot > 0 ? name.substring(0, dot) : name;
     }
 
-    final companion = parseSystemPromptImport(raw, fallbackName: fallbackName);
-    if (companion == null) {
+    final companions = parseSystemPromptImport(raw, fallbackName: fallbackName);
+    if (companions.isEmpty) {
       if (context.mounted) {
         await showErrorDialog(context, '没有可导入的内容');
       }
       return;
     }
     final presets = await ref.read(systemPromptPresetsProvider.future);
-    if (presets.any((p) => p.name == companion.name.value)) {
-      if (context.mounted) {
-        await showErrorDialog(context, '已存在同名预设「${companion.name.value}」');
+    final existingNames = presets.map((p) => p.name).toSet();
+    final db = ref.read(dbProvider);
+    var imported = 0;
+    var skipped = 0;
+    for (final c in companions) {
+      if (existingNames.contains(c.name.value)) {
+        skipped++;
+        continue;
       }
-      return;
+      await db.insertSystemPromptPreset(c);
+      existingNames.add(c.name.value);
+      imported++;
     }
-    await ref.read(dbProvider).insertSystemPromptPreset(companion);
-    if (context.mounted) await showSuccessDialog(context, '已导入预设');
+    if (!context.mounted) return;
+    if (imported == 0) {
+      await showErrorDialog(context, '全部与现有预设重名，未导入');
+    } else {
+      final msg = skipped > 0
+          ? '已导入 $imported 个预设，跳过 $skipped 个重名'
+          : '已导入 $imported 个预设';
+      await showSuccessDialog(context, msg);
+    }
   }
 
   Future<void> _export(BuildContext context, SystemPromptPreset p) async {
