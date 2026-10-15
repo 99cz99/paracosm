@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database.dart';
+import '../../../core/import/regex_script.dart';
 import '../../../core/providers/db_providers.dart';
 import '../../../core/utils/dialogs.dart';
 import '../data/character_repository.dart';
@@ -105,6 +106,65 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
   }
 
   void _removeTag(String tag) => setState(() => _tags.remove(tag));
+
+  int get _regexScriptCount {
+    final scripts = _core['regex_scripts'];
+    return scripts is List ? scripts.length : 0;
+  }
+
+  Future<void> _importRegexScript() async {
+    final mode = await showModalBottomSheet<_ImportMode>(
+      context: context,
+      useRootNavigator: false,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.folder_open),
+              title: const Text('文件导入'),
+              onTap: () => Navigator.of(sheetContext).pop(_ImportMode.file),
+            ),
+            ListTile(
+              leading: const Icon(Icons.content_paste),
+              title: const Text('粘贴 JSON'),
+              onTap: () => Navigator.of(sheetContext).pop(_ImportMode.paste),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mode == null || !mounted) return;
+
+    String? raw;
+    if (mode == _ImportMode.paste) {
+      raw = await showPasteTextDialog(context,
+          title: '粘贴正则脚本 JSON',
+          hint: '{scriptName, findRegex, replaceString}');
+      if (raw == null || raw.trim().isEmpty) return;
+    } else {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (files.isEmpty) return;
+      raw = utf8.decode(await files.first.readAsBytes());
+    }
+
+    final scripts = parseRegexScriptImport(raw);
+    if (scripts.isEmpty) {
+      if (mounted) await showErrorDialog(context, '不是有效的正则脚本 JSON');
+      return;
+    }
+    final existing = _core['regex_scripts'];
+    final list = existing is List ? List<dynamic>.from(existing) : <dynamic>[];
+    list.addAll(scripts);
+    setState(() => _core['regex_scripts'] = list);
+    if (mounted) {
+      await showSuccessDialog(
+          context, '已导入 ${scripts.length} 个正则脚本（共 ${list.length} 个）');
+    }
+  }
 
   Future<void> _save() async {
     final name = _name.text.trim();
@@ -372,6 +432,25 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
                     hintText: '{"scene":"场景","facts":"已知事实","items":"物品","npcs":"人物"}',
                   ),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _importRegexScript,
+                      icon: const Icon(Icons.code),
+                      label: const Text('导入正则脚本'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '已导入 $_regexScriptCount 个',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
                 FilledButton(onPressed: _save, child: const Text('保存')),
               ],
@@ -379,3 +458,5 @@ class _CharacterEditScreenState extends ConsumerState<CharacterEditScreen> {
     );
   }
 }
+
+enum _ImportMode { file, paste }
